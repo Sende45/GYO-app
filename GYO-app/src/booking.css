@@ -1,0 +1,22 @@
+.custom-calendar {
+    width: 100% !important;
+    background: white !important;
+    border-radius: 1rem !important;
+}
+
+/* Couleur du jour sélectionné */
+.react-calendar__tile--active {
+    background: #7C3AED !important; /* Ton Violet */
+    color: white !important;
+    border-radius: 8px;
+}
+
+.react-calendar__tile:hover {
+    background: #f3f0ff !important;
+    border-radius: 8px;
+}
+
+.react-calendar__navigation button:hover {
+    background-color: transparent !important;
+    color: #7C3AED !important;
+}
