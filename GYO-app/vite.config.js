@@ -9,11 +9,16 @@ export default defineConfig({
     tailwindcss(),
   ],
   test: {
-    // Cette section permet à Vitest de fonctionner
     globals: true,
     environment: 'jsdom',
     setupFiles: './src/setupTests.js',
-    // On exclut les dossiers lourds pour gagner en vitesse
     exclude: ['node_modules', 'dist'],
+    // AJOUTS CRUCIAUX :
+    css: true, // Permet de traiter les fichiers CSS (indispensable pour Tailwind v4)
+    server: {
+      deps: {
+        inline: [/tailwindcss/] // Force le traitement de Tailwind dans les tests
+      }
+    }
   },
 })
