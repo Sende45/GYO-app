@@ -31,7 +31,7 @@ const Footer = () => {
           <div>
             <h4 className="text-black font-bold uppercase tracking-widest text-xs mb-6">Contact</h4>
             <ul className="space-y-4 text-sm text-gray-600 font-light">
-              <li>123 Rue de la Sérénité, Paris</li>
+              <li>Cocody, Riviera 3 Abidjan</li>
               <li>+33 1 23 45 67 89</li>
               <li>contact@gyospa.com</li>
             </ul>
@@ -51,7 +51,7 @@ const Footer = () => {
         {/* Barre du bas */}
         <div className="pt-8 border-t border-gray-50 flex flex-col md:row justify-between items-center gap-4">
           <p className="text-[10px] text-gray-400 uppercase tracking-[0.3em]">
-            © 2026 GYO SPA — L'Élégance du calme
+            © 2026 GYO SPA — Le Luxe est une émotion
           </p>
           <div className="flex space-x-6">
             <a href="#" className="text-gray-400 hover:text-purple-600 transition-colors text-xs uppercase font-bold tracking-widest">Instagram</a>

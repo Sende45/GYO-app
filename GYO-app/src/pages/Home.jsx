@@ -31,7 +31,7 @@ const Home = () => {
       {/* Hero Section */}
       <section className="h-[90vh] flex flex-col items-center justify-center text-center px-4 bg-black text-white relative overflow-hidden">
         
-        {/* Glow effect animé qui respire aussi */}
+        {/* Glow effect animé */}
         <motion.div 
           animate={{ 
             scale: [1, 1.2, 1],
@@ -50,20 +50,20 @@ const Home = () => {
           Bienvenue chez GYO
         </motion.span>
 
-        {/* --- TITRE GYO SPA DYNAMIQUE --- */}
+        {/* TITRE GYO SPA */}
         <div className="relative z-10 mb-6 cursor-default select-none">
           <motion.h1 
             initial={{ y: 50, opacity: 0 }}
             animate={{ 
               y: 0, 
               opacity: 1,
-              scale: [1, 1.03, 1] // Effet de respiration lente
+              scale: [1, 1.03, 1]
             }}
-            whileHover={{ scale: 1.08 }} // Réaction au survol
+            whileHover={{ scale: 1.08 }}
             transition={{ 
               y: { duration: 1, ease: [0.16, 1, 0.3, 1] },
               opacity: { duration: 1 },
-              scale: { duration: 4, repeat: Infinity, ease: "easeInOut" } // Respiration infinie
+              scale: { duration: 4, repeat: Infinity, ease: "easeInOut" }
             }}
             className="text-7xl md:text-[10rem] font-black tracking-tighter leading-none"
           >
@@ -84,12 +84,13 @@ const Home = () => {
           transition={{ delay: 1.5 }}
           className="mt-12 z-10"
         >
+          {/* CORRECTION DU LIEN : /booking -> /reserver */}
           <Link 
-            to="/booking" 
+            to="/reserver" 
             className="group relative bg-purple-600 text-white px-12 py-5 rounded-full font-black transition-all duration-500 uppercase tracking-[0.2em] text-[10px] overflow-hidden inline-block shadow-lg shadow-purple-500/20"
           >
-            <span className="relative z-10 group-hover:text-black transition-colors">Réserver maintenant</span>
-            <div className="absolute inset-0 bg-white translate-y-full group-hover:translate-y-0 transition-transform duration-500" />
+            <span className="relative z-20 group-hover:text-black transition-colors duration-500">Réserver maintenant</span>
+            <div className="absolute inset-0 bg-white translate-y-full group-hover:translate-y-0 transition-transform duration-500 z-10" />
           </Link>
         </motion.div>
       </section>
@@ -110,7 +111,7 @@ const Home = () => {
         ))}
       </section>
 
-      {/* Citation Section avec apparition au scroll */}
+      {/* Citation Section */}
       <section className="bg-black py-32 text-center overflow-hidden">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}

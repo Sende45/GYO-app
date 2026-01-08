@@ -1,13 +1,40 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import { db, auth } from '../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import emailjs from '@emailjs/browser'; // Import EmailJS
 
 const GiftCards = () => {
   const [amount, setAmount] = useState(50);
   const [recipient, setRecipient] = useState('');
   const [isGenerated, setIsGenerated] = useState(false);
   const [generatedCode, setGeneratedCode] = useState('');
+  const [isSending, setIsSending] = useState(false);
+
+  // Fonction pour envoyer l'email via EmailJS
+  const sendEmail = (code, recipientName, amountValue) => {
+    const templateParams = {
+      to_email: auth.currentUser?.email, // Envoi à l'acheteur
+      recipient_name: recipientName,
+      gift_code: code,
+      amount: amountValue,
+    };
+
+    // REMPLACE CES 3 VALEURS PAR TES IDS EMAILJS
+    emailjs.send(
+      'YOUR_SERVICE_ID', 
+      'YOUR_TEMPLATE_ID', 
+      templateParams, 
+      'YOUR_PUBLIC_KEY'
+    )
+    .then((response) => {
+      console.log('Email envoyé avec succès !', response.status, response.text);
+    })
+    .catch((err) => {
+      console.error('Erreur EmailJS:', err);
+    });
+  };
 
   const generateGiftCode = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -19,8 +46,13 @@ const GiftCards = () => {
   };
 
   const handlePurchase = async () => {
+    if (!recipient) return alert("Veuillez saisir le nom du bénéficiaire");
+    
+    setIsSending(true);
     const newCode = generateGiftCode();
+    
     try {
+      // 1. Enregistrement dans Firestore
       await addDoc(collection(db, "gift_cards"), {
         code: newCode,
         amount: amount,
@@ -29,10 +61,16 @@ const GiftCards = () => {
         isUsed: false,
         createdAt: serverTimestamp()
       });
+
+      // 2. Envoi du mail de confirmation
+      sendEmail(newCode, recipient, amount);
+
       setGeneratedCode(newCode);
       setIsGenerated(true);
     } catch (error) {
       console.error("Erreur lors de la création de la carte:", error);
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -88,15 +126,17 @@ const GiftCards = () => {
                   type="text"
                   placeholder="Ex: Sarah Martin"
                   className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 outline-none focus:ring-2 ring-purple-600/20"
+                  value={recipient}
                   onChange={(e) => setRecipient(e.target.value)}
                 />
               </div>
 
               <button 
                 onClick={handlePurchase}
-                className="w-full bg-black text-white py-5 rounded-full font-black uppercase tracking-widest text-[10px] hover:bg-purple-600 transition-all duration-500 shadow-xl"
+                disabled={isSending}
+                className={`w-full py-5 rounded-full font-black uppercase tracking-widest text-[10px] transition-all duration-500 shadow-xl ${isSending ? 'bg-gray-400' : 'bg-black text-white hover:bg-purple-600'}`}
               >
-                Générer la carte cadeau
+                {isSending ? 'Génération...' : 'Générer la carte cadeau'}
               </button>
             </div>
           </div>
@@ -109,16 +149,16 @@ const GiftCards = () => {
               <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
             </div>
             <h2 className="text-3xl font-black uppercase tracking-tighter">Félicitations !</h2>
-            <p className="text-gray-500 mt-2 font-medium italic mb-10">Votre carte de {amount}€ pour {recipient} est prête.</p>
+            <p className="text-gray-500 mt-2 font-medium italic mb-10">Un email de confirmation a été envoyé à {auth.currentUser?.email}.</p>
             
             <div className="bg-white border-2 border-dashed border-purple-200 p-8 rounded-3xl inline-block">
-              <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-2">Voici le code unique :</p>
+              <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-2">Code pour {recipient} :</p>
               <p className="text-4xl font-black text-purple-600 tracking-[0.2em]">{generatedCode}</p>
             </div>
             
             <div className="mt-12 flex flex-col gap-4 max-w-xs mx-auto">
-              <button className="text-[10px] font-black uppercase tracking-widest text-gray-400 underline hover:text-black transition-colors" onClick={() => setIsGenerated(false)}>Offrir une autre carte</button>
-              <Link to="/dashboard" className="bg-black text-white py-4 rounded-full font-black uppercase text-[10px] tracking-widest">Retour à mon espace</Link>
+              <button className="text-[10px] font-black uppercase tracking-widest text-gray-400 underline hover:text-black transition-colors" onClick={() => {setIsGenerated(false); setRecipient('');}}>Offrir une autre carte</button>
+              <Link to="/mon-compte" className="bg-black text-white py-4 rounded-full font-black uppercase text-[10px] tracking-widest text-center">Retour à mon espace</Link>
             </div>
           </motion.div>
         )}
