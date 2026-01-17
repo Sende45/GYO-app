@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-// FIREBASE AUTH
-import { auth } from '../firebase';
+// FIREBASE AUTH & FIRESTORE
+import { auth, db } from '../firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore'; 
 // IMPORT DU LOGO
 import logo from '../assets/logo.png'; 
 
@@ -20,9 +21,29 @@ const Login = () => {
     setError('');
     
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      // Redirection vers l'espace membre existant
-      navigate('/mon-compte');
+      // 1. Authentification avec Firebase Auth
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // 2. Récupération du rôle dans Firestore pour GATES
+      const userDoc = await getDoc(doc(db, "users", user.uid));
+      
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        
+        // 3. Logique de redirection GATES vs Client
+        if (userData.role === 'admin' || userData.role === 'agent') {
+          // Redirection vers le tableau de bord interne des agents
+          navigate('/admin-dashboard'); 
+        } else {
+          // Redirection vers l'espace client (site vitrine)
+          navigate('/mon-compte');
+        }
+      } else {
+        // Fallback si l'utilisateur n'est pas encore dans la base Firestore
+        navigate('/mon-compte');
+      }
+
     } catch (err) {
       setError("Identifiants invalides. Veuillez réessayer.");
       console.error(err.message);
@@ -60,14 +81,14 @@ const Login = () => {
               animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: 0.3 }}
               src={logo} 
-              alt="Logo GYO SPA" 
+              alt="Logo GATES" 
               className="h-20 w-auto mx-auto mb-6 object-contain drop-shadow-[0_0_15px_rgba(147,51,234,0.3)]" 
             />
             <h2 className="text-3xl font-black text-white tracking-tighter uppercase mb-2">
-              GYO <span className="text-purple-500">SPA</span>
+              GATES <span className="text-purple-500">SERVICE</span>
             </h2>
             <p className="text-gray-400 text-[10px] font-bold uppercase tracking-[0.3em]">
-                Connectez-vous à l'excellence
+                Accès Portail Sécurisé
             </p>
           </div>
 
@@ -88,7 +109,7 @@ const Login = () => {
                 type="email" 
                 required
                 className="w-full bg-white/5 border border-white/10 rounded-full px-6 py-4 text-white text-sm focus:outline-none focus:border-purple-600 transition-all placeholder:text-gray-600"
-                placeholder="votre@email.com"
+                placeholder="agent@gates.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
@@ -115,17 +136,14 @@ const Login = () => {
                 : 'bg-white text-black hover:bg-purple-600 hover:text-white shadow-purple-500/10'
               }`}
             >
-              {isLoading ? 'Chargement...' : 'Se Connecter'}
+              {isLoading ? 'Identification...' : 'Se Connecter'}
             </button>
           </form>
 
           <div className="mt-8 text-center space-y-4">
             <p className="text-gray-500 text-[10px] uppercase tracking-widest">
-              Pas encore membre ? <Link to="/abonnements" className="text-purple-500 font-black hover:underline ml-1">Découvrir les plans</Link>
+              GATES Centrafrique - Logistique & Transit [cite: 37]
             </p>
-            <button className="text-gray-600 text-[9px] uppercase tracking-[0.3em] hover:text-white transition-colors block w-full">
-              Mot de passe oublié ?
-            </button>
           </div>
         </div>
       </motion.div>
