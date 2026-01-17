@@ -21,27 +21,26 @@ const Login = () => {
     setError('');
     
     try {
-      // 1. Authentification sécurisée
+      // 1. Authentification sécurisée via Firebase Auth
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // 2. Récupération du profil utilisateur dans Firestore
-      // Indispensable pour distinguer les agents GATES des clients
+      // 2. Vérification du profil dans la collection 'users' (créée automatiquement à l'inscription)
       const userDoc = await getDoc(doc(db, "users", user.uid));
       
       if (userDoc.exists()) {
         const userData = userDoc.data();
         
-        // 3. Redirection basée sur le rôle (Admin/Agent vs Client)
+        // 3. Redirection GYO : Administration du SPA vs Espace Client
         if (userData.role === 'admin' || userData.role === 'agent') {
-          // Accès au tableau de bord de gestion (Commandes, Poids, Logistique)
+          // Vers la gestion des rendez-vous et soins
           navigate('/admin-dashboard'); 
         } else {
-          // Accès à l'espace client standard
+          // Vers l'espace personnel du client
           navigate('/mon-compte');
         }
       } else {
-        // Fallback si le document n'existe pas encore (nouveau client)
+        // Si le document Firestore n'existe pas encore, direction espace client par défaut
         navigate('/mon-compte');
       }
 
@@ -55,7 +54,7 @@ const Login = () => {
 
   return (
     <div className="min-h-screen bg-black flex items-center justify-center px-6 relative overflow-hidden">
-      {/* Effets de lumière violette animés */}
+      {/* Effets de lumière violette GYO SPA */}
       <motion.div 
         animate={{ scale: [1, 1.2, 1], opacity: [0.2, 0.3, 0.2] }}
         transition={{ duration: 8, repeat: Infinity }}
@@ -75,21 +74,21 @@ const Login = () => {
       >
         <div className="bg-white/5 backdrop-blur-xl p-10 rounded-[3rem] border border-white/10 shadow-2xl relative overflow-hidden">
           
-          {/* SECTION LOGO GATES */}
+          {/* SECTION LOGO GYO SPA */}
           <div className="text-center mb-10">
             <motion.img 
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: 0.3 }}
               src={logo} 
-              alt="Logo GATES" 
+              alt="Logo GYO" 
               className="h-20 w-auto mx-auto mb-6 object-contain drop-shadow-[0_0_15px_rgba(147,51,234,0.3)]" 
             />
             <h2 className="text-3xl font-black text-white tracking-tighter uppercase mb-2">
-              GATES <span className="text-purple-500">SERVICE</span>
+              GYO <span className="text-purple-500">EXCELLENCE</span>
             </h2>
             <p className="text-gray-400 text-[10px] font-bold uppercase tracking-[0.3em]">
-                Accès Portail Sécurisé
+                Espace Membre Sécurisé
             </p>
           </div>
 
@@ -110,7 +109,7 @@ const Login = () => {
                 type="email" 
                 required
                 className="w-full bg-white/5 border border-white/10 rounded-full px-6 py-4 text-white text-sm focus:outline-none focus:border-purple-600 transition-all placeholder:text-gray-600"
-                placeholder="agent@gates.com"
+                placeholder="votre@email.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
@@ -137,13 +136,13 @@ const Login = () => {
                 : 'bg-white text-black hover:bg-purple-600 hover:text-white shadow-purple-500/10'
               }`}
             >
-              {isLoading ? 'Vérification...' : 'Se Connecter'}
+              {isLoading ? 'Connexion en cours...' : 'Se Connecter'}
             </button>
           </form>
 
           <div className="mt-8 text-center space-y-4">
             <p className="text-gray-500 text-[10px] uppercase tracking-widest">
-              GATES Centrafrique - Logistique & Transit [cite: 37]
+              GYO SPA Abidjan - L'excellence au service du bien-être
             </p>
           </div>
         </div>
