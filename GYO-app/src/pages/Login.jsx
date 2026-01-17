@@ -21,26 +21,27 @@ const Login = () => {
     setError('');
     
     try {
-      // 1. Authentification avec Firebase Auth
+      // 1. Authentification sécurisée
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // 2. Récupération du rôle dans Firestore pour GATES
+      // 2. Récupération du profil utilisateur dans Firestore
+      // Indispensable pour distinguer les agents GATES des clients
       const userDoc = await getDoc(doc(db, "users", user.uid));
       
       if (userDoc.exists()) {
         const userData = userDoc.data();
         
-        // 3. Logique de redirection GATES vs Client
+        // 3. Redirection basée sur le rôle (Admin/Agent vs Client)
         if (userData.role === 'admin' || userData.role === 'agent') {
-          // Redirection vers le tableau de bord interne des agents
+          // Accès au tableau de bord de gestion (Commandes, Poids, Logistique)
           navigate('/admin-dashboard'); 
         } else {
-          // Redirection vers l'espace client (site vitrine)
+          // Accès à l'espace client standard
           navigate('/mon-compte');
         }
       } else {
-        // Fallback si l'utilisateur n'est pas encore dans la base Firestore
+        // Fallback si le document n'existe pas encore (nouveau client)
         navigate('/mon-compte');
       }
 
@@ -74,7 +75,7 @@ const Login = () => {
       >
         <div className="bg-white/5 backdrop-blur-xl p-10 rounded-[3rem] border border-white/10 shadow-2xl relative overflow-hidden">
           
-          {/* SECTION LOGO */}
+          {/* SECTION LOGO GATES */}
           <div className="text-center mb-10">
             <motion.img 
               initial={{ scale: 0.8, opacity: 0 }}
@@ -136,7 +137,7 @@ const Login = () => {
                 : 'bg-white text-black hover:bg-purple-600 hover:text-white shadow-purple-500/10'
               }`}
             >
-              {isLoading ? 'Identification...' : 'Se Connecter'}
+              {isLoading ? 'Vérification...' : 'Se Connecter'}
             </button>
           </form>
 
