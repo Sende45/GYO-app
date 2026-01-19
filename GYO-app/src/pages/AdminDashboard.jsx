@@ -1,34 +1,51 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom'; // Ajout pour la redirection
 import logo from '../assets/logo.png';
 // 1. IMPORT DES OUTILS FIREBASE
-import { db } from '../firebase';
-import { collection, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
+import { db, auth } from '../firebase'; // Ajout de auth
+import { collection, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy, getDoc } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
 
 const AdminDashboard = () => {
   const [allBookings, setAllBookings] = useState([]);
-  const [allGiftCards, setAllGiftCards] = useState([]); // État pour les cadeaux
+  const [allGiftCards, setAllGiftCards] = useState([]);
   const [filter, setFilter] = useState('Réservations');
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [passkey, setPasskey] = useState('');
+  const [isLoading, setIsLoading] = useState(true); // État de chargement
+  const navigate = useNavigate();
 
-  // 2. RÉCUPÉRATION TEMPS RÉEL
+  // 2. VÉRIFICATION DE L'AUTHENTIFICATION ET RÉCUPÉRATION DES DONNÉES
   useEffect(() => {
-    if (!isAdmin) return;
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        // Vérifier le rôle dans Firestore pour double sécurité
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (userDoc.exists() && (userDoc.data().role === 'admin' || userDoc.data().role === 'agent')) {
+          setIsLoading(false);
+          
+          // Lancer les écoutes en temps réel
+          const qBookings = query(collection(db, "bookings"), orderBy("createdAt", "desc"));
+          const unsubBookings = onSnapshot(qBookings, (snapshot) => {
+            setAllBookings(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+          });
 
-    // Écoute des Réservations (triées par date de création)
-    const qBookings = query(collection(db, "bookings"), orderBy("createdAt", "desc"));
-    const unsubBookings = onSnapshot(qBookings, (snapshot) => {
-      setAllBookings(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+          const qCards = query(collection(db, "gift_cards"), orderBy("createdAt", "desc"));
+          const unsubCards = onSnapshot(qCards, (snapshot) => {
+            setAllGiftCards(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+          });
+
+          return () => { unsubBookings(); unsubCards(); };
+        } else {
+          // Si l'utilisateur n'est pas admin, on le déconnecte et redirige
+          navigate('/admin-gyo-access');
+        }
+      } else {
+        // Pas d'utilisateur connecté
+        navigate('/admin-gyo-access');
+      }
     });
 
-    // Écoute des Cartes Cadeaux
-    const qCards = query(collection(db, "gift_cards"), orderBy("createdAt", "desc"));
-    const unsubCards = onSnapshot(qCards, (snapshot) => {
-      setAllGiftCards(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
-
-    return () => { unsubBookings(); unsubCards(); };
-  }, [isAdmin]);
+    return () => unsubscribeAuth();
+  }, [navigate]);
 
   // Calcul des statistiques
   const pendingCount = allBookings.filter(b => b.status === 'En attente').length;
@@ -56,28 +73,16 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleAuth = (e) => {
-    e.preventDefault();
-    if (passkey === 'GYO2026') setIsAdmin(true);
-    else alert('Code incorrect');
+  const handleLogout = async () => {
+    await auth.signOut();
+    navigate('/admin-gyo-access');
   };
 
-  if (!isAdmin) {
+  // Écran de chargement
+  if (isLoading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center p-6 text-center">
-        <div className="max-w-sm w-full">
-          <img src={logo} alt="Logo" className="h-20 mx-auto mb-10 opacity-80" />
-          <form onSubmit={handleAuth} className="space-y-4">
-            <h2 className="text-white text-[10px] font-black uppercase tracking-[0.4em] mb-6">Accès Administration</h2>
-            <input 
-              type="password" 
-              placeholder="Entrez le code"
-              className="w-full bg-white/5 border border-white/10 rounded-full px-6 py-4 text-white text-center focus:outline-none focus:border-purple-600 transition-all"
-              value={passkey}
-              onChange={(e) => setPasskey(e.target.value)}
-            />
-          </form>
-        </div>
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="animate-pulse text-purple-500 font-black tracking-widest">GYO SECURE ACCESS...</div>
       </div>
     );
   }
@@ -86,6 +91,17 @@ const AdminDashboard = () => {
     <div className="min-h-screen bg-gray-50 py-12 px-6">
       <div className="max-w-7xl mx-auto">
         
+        {/* HEADER AVEC LOGOUT */}
+        <div className="flex justify-between items-center mb-10">
+          <img src={logo} alt="GYO SPA" className="h-12" />
+          <button 
+            onClick={handleLogout}
+            className="text-[10px] font-bold bg-white border border-gray-200 px-6 py-2 rounded-full hover:bg-red-50 hover:text-red-600 transition-all uppercase tracking-widest"
+          >
+            Déconnexion
+          </button>
+        </div>
+
         {/* DASHBOARD STATS */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
           <div className="bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm">
@@ -121,82 +137,86 @@ const AdminDashboard = () => {
         {/* TABLEAUX DE DONNÉES */}
         <div className="bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border border-gray-100">
           {filter === 'Réservations' ? (
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-gray-50 text-gray-400 text-[10px] uppercase tracking-[0.2em]">
-                  <th className="p-8">Client</th>
-                  <th className="p-8">Prestation</th>
-                  <th className="p-8">Date & Heure</th>
-                  <th className="p-8">Statut</th>
-                  <th className="p-8 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {allBookings.map((b) => (
-                  <tr key={b.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="p-8">
-                      <p className="font-black text-black uppercase text-sm">{b.clientName || 'Inconnu'}</p>
-                      <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">{b.email}</p>
-                    </td>
-                    <td className="p-8 text-sm font-medium text-gray-600 italic">{b.service}</td>
-                    <td className="p-8 text-sm font-black">{b.date} • {b.time}</td>
-                    <td className="p-8">
-                      <span className={`text-[9px] font-black px-4 py-2 rounded-full uppercase tracking-widest ${
-                        b.status === 'Confirmé' ? 'bg-green-100 text-green-700' : 
-                        b.status === 'Refusé' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
-                      }`}>
-                        {b.status}
-                      </span>
-                    </td>
-                    <td className="p-8 text-right space-x-2">
-                      <button onClick={() => updateStatus(b.id, 'Confirmé')} className="bg-green-500 text-white p-2.5 rounded-xl hover:scale-110 transition-transform">✓</button>
-                      <button onClick={() => updateStatus(b.id, 'Refusé')} className="bg-red-500 text-white p-2.5 rounded-xl hover:scale-110 transition-transform">✕</button>
-                      <button onClick={() => handleDelete(b.id, 'booking')} className="bg-gray-100 text-gray-300 p-2.5 rounded-xl hover:bg-red-500 hover:text-white transition-all">🗑</button>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-gray-50 text-gray-400 text-[10px] uppercase tracking-[0.2em]">
+                    <th className="p-8">Client</th>
+                    <th className="p-8">Prestation</th>
+                    <th className="p-8">Date & Heure</th>
+                    <th className="p-8">Statut</th>
+                    <th className="p-8 text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {allBookings.map((b) => (
+                    <tr key={b.id} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="p-8">
+                        <p className="font-black text-black uppercase text-sm">{b.clientName || 'Inconnu'}</p>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">{b.email}</p>
+                      </td>
+                      <td className="p-8 text-sm font-medium text-gray-600 italic">{b.service}</td>
+                      <td className="p-8 text-sm font-black">{b.date} • {b.time}</td>
+                      <td className="p-8">
+                        <span className={`text-[9px] font-black px-4 py-2 rounded-full uppercase tracking-widest ${
+                          b.status === 'Confirmé' ? 'bg-green-100 text-green-700' : 
+                          b.status === 'Refusé' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
+                        }`}>
+                          {b.status}
+                        </span>
+                      </td>
+                      <td className="p-8 text-right space-x-2">
+                        <button onClick={() => updateStatus(b.id, 'Confirmé')} className="bg-green-500 text-white p-2.5 rounded-xl hover:scale-110 transition-transform">✓</button>
+                        <button onClick={() => updateStatus(b.id, 'Refusé')} className="bg-red-500 text-white p-2.5 rounded-xl hover:scale-110 transition-transform">✕</button>
+                        <button onClick={() => handleDelete(b.id, 'booking')} className="bg-gray-100 text-gray-300 p-2.5 rounded-xl hover:bg-red-500 hover:text-white transition-all">🗑</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-gray-50 text-gray-400 text-[10px] uppercase tracking-[0.2em]">
-                  <th className="p-8">Code Cadeau</th>
-                  <th className="p-8">Destinataire</th>
-                  <th className="p-8">Montant</th>
-                  <th className="p-8">Statut</th>
-                  <th className="p-8 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {allGiftCards.map((c) => (
-                  <tr key={c.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="p-8 font-mono font-bold text-purple-600 text-lg tracking-tighter">{c.code}</td>
-                    <td className="p-8 font-black uppercase text-sm">{c.recipient}</td>
-                    <td className="p-8 font-black text-xl">{c.amount}€</td>
-                    <td className="p-8">
-                      <span className={`text-[9px] font-black px-4 py-2 rounded-full uppercase tracking-widest ${
-                        c.isUsed ? 'bg-gray-100 text-gray-400' : 'bg-green-100 text-green-700 animate-pulse'
-                      }`}>
-                        {c.isUsed ? 'Utilisée' : 'Valide'}
-                      </span>
-                    </td>
-                    <td className="p-8 text-right">
-                      {!c.isUsed ? (
-                        <button 
-                          onClick={() => redeemCard(c.id)}
-                          className="bg-black text-white text-[10px] font-black uppercase px-6 py-3 rounded-full hover:bg-purple-600 transition-colors"
-                        >
-                          Encaisser le soin
-                        </button>
-                      ) : (
-                        <button onClick={() => handleDelete(c.id, 'gift')} className="text-gray-300 hover:text-red-500 p-2 text-xs font-bold uppercase">Supprimer</button>
-                      )}
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-gray-50 text-gray-400 text-[10px] uppercase tracking-[0.2em]">
+                    <th className="p-8">Code Cadeau</th>
+                    <th className="p-8">Destinataire</th>
+                    <th className="p-8">Montant</th>
+                    <th className="p-8">Statut</th>
+                    <th className="p-8 text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {allGiftCards.map((c) => (
+                    <tr key={c.id} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="p-8 font-mono font-bold text-purple-600 text-lg tracking-tighter">{c.code}</td>
+                      <td className="p-8 font-black uppercase text-sm">{c.recipient}</td>
+                      <td className="p-8 font-black text-xl">{c.amount}€</td>
+                      <td className="p-8">
+                        <span className={`text-[9px] font-black px-4 py-2 rounded-full uppercase tracking-widest ${
+                          c.isUsed ? 'bg-gray-100 text-gray-400' : 'bg-green-100 text-green-700 animate-pulse'
+                        }`}>
+                          {c.isUsed ? 'Utilisée' : 'Valide'}
+                        </span>
+                      </td>
+                      <td className="p-8 text-right">
+                        {!c.isUsed ? (
+                          <button 
+                            onClick={() => redeemCard(c.id)}
+                            className="bg-black text-white text-[10px] font-black uppercase px-6 py-3 rounded-full hover:bg-purple-600 transition-colors"
+                          >
+                            Encaisser le soin
+                          </button>
+                        ) : (
+                          <button onClick={() => handleDelete(c.id, 'gift')} className="text-gray-300 hover:text-red-500 p-2 text-xs font-bold uppercase">Supprimer</button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>

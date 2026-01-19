@@ -15,6 +15,7 @@ import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import AdminDashboard from './pages/AdminDashboard';
 import GiftCards from './pages/GiftCards';
+import AdminLogin from './pages/AdminLogin';
 
 // IMPORTS DES COMPOSANTS
 import Footer from './components/Footer';
@@ -102,7 +103,8 @@ function App() {
           <Route path="/mon-compte" element={user ? <Dashboard /> : <Navigate to="/login" />} />
           
           {/* Admin (à protéger par un rôle plus tard) */}
-          <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin-dashboard" element={<AdminDashboard />} />
+          <Route path="/admin" element={<AdminLogin />} />
 
           {/* Fallback : redirection si la page n'existe pas */}
           <Route path="*" element={<Navigate to="/" />} />
