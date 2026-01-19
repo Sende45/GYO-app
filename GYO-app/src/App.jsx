@@ -16,6 +16,7 @@ import Login from './pages/Login';
 import AdminDashboard from './pages/AdminDashboard';
 import GiftCards from './pages/GiftCards';
 import AdminLogin from './pages/AdminLogin';
+import UserAccount from './pages/UserAccount';
 
 // IMPORTS DES COMPOSANTS
 import Footer from './components/Footer';
@@ -105,6 +106,8 @@ function App() {
           {/* Admin (à protéger par un rôle plus tard) */}
           <Route path="/admin-dashboard" element={<AdminDashboard />} />
           <Route path="/admin" element={<AdminLogin />} />
+
+          <Route path="/mon-compte" element={<UserAccount />} />
 
           {/* Fallback : redirection si la page n'existe pas */}
           <Route path="*" element={<Navigate to="/" />} />
