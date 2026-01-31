@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react'; // Ajout de useEffect
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-// FIREBASE AUTH & FIRESTORE
 import { auth, db } from '../firebase';
-import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth'; // Ajout de onAuthStateChanged
 import { doc, getDoc } from 'firebase/firestore'; 
 import logo from '../assets/logo.png'; 
 
@@ -14,112 +13,131 @@ const AdminLogin = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
+  // AJOUT : Vérification au chargement
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (userDoc.exists() && (userDoc.data().role === 'admin' || userDoc.data().role === 'agent')) {
+          navigate('/admin-dashboard'); // Si déjà admin, on skip le login
+        }
+      }
+    });
+    return () => unsub();
+  }, [navigate]);
+
   const handleAdminLogin = async (e) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
     
     try {
-      // 1. Connexion via Firebase
+      // 1. Authentification Firebase
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-
-      // 2. Vérification stricte du rôle
+      
+      // 2. Récupération du rôle dans Firestore
       const userDoc = await getDoc(doc(db, "users", user.uid));
       
       if (userDoc.exists()) {
         const userData = userDoc.data();
         
-        // Autoriser uniquement Admin ou Agent
+        // Vérification du grade (Admin ou Agent uniquement)
         if (userData.role === 'admin' || userData.role === 'agent') {
+          console.log("Accès autorisé : " + userData.role);
           navigate('/admin-dashboard'); 
         } else {
-          // Si c'est un client, on le déconnecte immédiatement et on affiche une erreur
-          setError("Accès refusé. Cette interface est réservée à l'administration.");
-          await signOut(auth);
+          // Si c'est un rôle "client", on refuse l'accès
+          setError("Accès refusé. Cette interface est réservée au staff GYO.");
+          await signOut(auth); // Sécurité
         }
       } else {
-        setError("Profil non trouvé dans la base de données.");
+        setError("Profil administrateur non configuré.");
         await signOut(auth);
       }
 
     } catch (err) {
-      setError("Identifiants admin invalides.");
-      console.error(err.message);
+      console.error("Erreur Login Admin:", err.code);
+      if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
+        setError("Identifiants de sécurité incorrects.");
+      } else {
+        setError("Erreur système : " + err.message);
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] flex items-center justify-center px-6 relative">
-      {/* Design plus technique / sobre pour l'admin */}
-      <div className="absolute inset-0 bg-grid-white/[0.02] bg-[size:40px_40px]" />
+    <div className="min-h-screen bg-[#050505] flex items-center justify-center px-6 relative overflow-hidden">
+      {/* Background Technique */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-purple-900/10 via-transparent to-transparent" />
       
       <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
         className="max-w-md w-full z-10"
       >
-        <div className="bg-[#0f0f0f] border-t-4 border-purple-600 p-10 rounded-xl shadow-2xl shadow-purple-900/20">
+        <div className="bg-[#0f0f0f] border border-white/5 p-10 rounded-2xl shadow-2xl">
           
           <div className="text-center mb-10">
-            <img src={logo} alt="Logo GYO" className="h-12 mx-auto mb-4 grayscale contrast-125" />
-            <h2 className="text-xl font-mono text-white tracking-widest uppercase">
-              Terminal <span className="text-purple-500 font-bold">Admin</span>
+            <img src={logo} alt="Logo GYO" className="h-10 mx-auto mb-6 grayscale brightness-200" />
+            <h2 className="text-sm font-black text-white tracking-[0.4em] uppercase">
+              Terminal <span className="text-purple-500">Staff</span>
             </h2>
-            <div className="h-[1px] w-20 bg-purple-600 mx-auto mt-2" />
+            <div className="h-1 w-12 bg-purple-600 mx-auto mt-4 rounded-full" />
           </div>
 
           {error && (
-            <div className="bg-red-500/10 border border-red-500/50 p-3 rounded mb-6">
-              <p className="text-red-500 text-[11px] font-bold text-center uppercase tracking-tighter">
-                {error}
-              </p>
-            </div>
+            <motion.div 
+              initial={{ x: -10 }} animate={{ x: 0 }}
+              className="bg-red-500/10 border-l-2 border-red-500 p-4 mb-6"
+            >
+              <p className="text-red-500 text-[10px] font-bold uppercase tracking-widest">{error}</p>
+            </motion.div>
           )}
 
           <form onSubmit={handleAdminLogin} className="space-y-6">
-            <div>
-              <label className="text-[10px] font-bold text-gray-500 uppercase ml-1">Identifiant Admin</label>
+            <div className="space-y-2">
+              <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest ml-1">Identifiant</label>
               <input 
                 type="email" 
-                required
-                className="w-full bg-[#1a1a1a] border border-white/5 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600 transition-all mt-1"
+                className="w-full bg-[#151515] border border-white/5 rounded-xl px-5 py-4 text-white text-sm focus:outline-none focus:border-purple-600 transition-all"
                 placeholder="admin@gyospa.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                required
               />
             </div>
 
-            <div>
-              <label className="text-[10px] font-bold text-gray-500 uppercase ml-1">Clé d'accès</label>
+            <div className="space-y-2">
+              <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest ml-1">Clé de sécurité</label>
               <input 
                 type="password" 
-                required
-                className="w-full bg-[#1a1a1a] border border-white/5 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600 transition-all mt-1"
+                className="w-full bg-[#151515] border border-white/5 rounded-xl px-5 py-4 text-white text-sm focus:outline-none focus:border-purple-600 transition-all"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                required
               />
             </div>
 
             <button 
               type="submit"
               disabled={isLoading}
-              className={`w-full py-4 rounded-lg font-bold text-xs uppercase tracking-widest transition-all ${
-                isLoading 
-                ? 'bg-gray-800 text-gray-500' 
-                : 'bg-purple-600 text-white hover:bg-purple-700 active:scale-[0.98]'
-              }`}
+              className="w-full py-4 bg-white text-black rounded-xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-purple-600 hover:text-white transition-all duration-300 disabled:opacity-50"
             >
-              {isLoading ? 'Vérification...' : 'Accéder au Dashboard'}
+              {isLoading ? 'Vérification en cours...' : 'Initialiser la session'}
             </button>
           </form>
 
-          <p className="text-center mt-8 text-[9px] text-gray-600 uppercase tracking-[0.3em]">
-            GYO Excellence Management v1.0
-          </p>
+          <div className="mt-10 flex justify-between items-center opacity-30">
+            <span className="text-[8px] text-white uppercase font-bold tracking-tighter">GYO System v1.0</span>
+            <div className="flex gap-1">
+              <div className="w-1 h-1 rounded-full bg-green-500 animate-pulse" />
+              <span className="text-[8px] text-green-500 uppercase font-bold">Secure Connection</span>
+            </div>
+          </div>
         </div>
       </motion.div>
     </div>

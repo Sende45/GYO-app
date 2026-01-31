@@ -7,8 +7,8 @@ import 'react-calendar/dist/Calendar.css';
 import '../booking.css';
 
 // FIREBASE
-import { db } from "../firebase";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { db, auth } from "../firebase";
+import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc } from "firebase/firestore";
 
 const BookingPage = () => {
   const [selectedService, setSelectedService] = useState(null);
@@ -16,21 +16,37 @@ const BookingPage = () => {
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   
-  // --- DYNAMISME DU TEXTE (SLIDE UP) ---
+  const [userSubscription, setUserSubscription] = useState(null);
   const [titleIndex, setTitleIndex] = useState(0);
   const titles = ["VOTRE BIEN-ÊTRE", "VOTRE BEAUTÉ", "VOTRE STYLE"];
+  const navigate = useNavigate();
 
   useEffect(() => {
     const timer = setInterval(() => {
       setTitleIndex((prev) => (prev + 1) % titles.length);
-    }, 3000); // Change de mot toutes les 3 secondes
+    }, 3000);
+
+    // Récupération de l'abonnement SEULEMENT si connecté
+    const fetchSubscription = async () => {
+      if (auth.currentUser) {
+        try {
+          const userRef = doc(db, "users", auth.currentUser.uid);
+          const userSnap = await getDoc(userRef);
+          if (userSnap.exists()) {
+            setUserSubscription(userSnap.data().subscription || null);
+          }
+        } catch (error) {
+          console.error("Erreur récupération profil:", error);
+        }
+      }
+    };
+    fetchSubscription();
+
     return () => clearInterval(timer);
   }, []);
 
   const [userData, setUserData] = useState({ firstName: '', lastName: '', email: '', phone: '' });
-  const navigate = useNavigate();
 
-  // --- LISTE DE SERVICES COMPLÈTE ---
   const services = [
     { id: 1, title: "Massage Deep Tissue", duration: 60, price: 85, description: "Détente musculaire profonde." },
     { id: 2, title: "Soin Visage Éclat", duration: 45, price: 60, description: "Nettoyage et luminosité." },
@@ -48,15 +64,25 @@ const BookingPage = () => {
     setUserData({ ...userData, [e.target.name]: e.target.value });
   };
 
+  const handleSelectService = (service) => {
+    // PLUS DE REDIRECTION : Tout le monde peut ouvrir le modal
+    setSelectedService(service);
+  };
+
   const handleConfirmBooking = async () => {
-    if (!selectedService || !selectedSlot) return alert("Veuillez sélectionner un service et une heure.");
+    if (!selectedService || !selectedSlot) return alert("Veuillez sélectionner une heure.");
     if (!userData.firstName || !userData.lastName || !userData.email || !userData.phone) {
-      return alert("Veuillez remplir toutes vos coordonnées.");
+      return alert("Veuillez remplir vos coordonnées.");
     }
 
     setIsUploading(true);
     try {
-      await addDoc(collection(db, "bookings"), {
+      // Logique d'abonnement (uniquement si l'utilisateur est connecté et possède un forfait)
+      const hasActiveSub = auth.currentUser && userSubscription && userSubscription.status === 'active' && userSubscription.remainingSessions > 0;
+
+      const bookingData = {
+        // Sécurité : on met l'UID si connecté, sinon on marque "GUEST"
+        userId: auth.currentUser?.uid || "GUEST",
         service: selectedService.title,
         date: date.toLocaleDateString('fr-FR'),
         time: selectedSlot,
@@ -64,11 +90,24 @@ const BookingPage = () => {
         clientName: `${userData.firstName} ${userData.lastName}`,
         email: userData.email,
         phone: userData.phone,
-        status: "En attente",
-        createdAt: serverTimestamp()
-      });
+        createdAt: serverTimestamp(),
+        paymentMethod: hasActiveSub ? "Abonnement" : "Paiement au Salon",
+        status: hasActiveSub ? "Confirmé (Membre)" : "En attente"
+      };
+
+      if (hasActiveSub) {
+        const userRef = doc(db, "users", auth.currentUser.uid);
+        const isVIP = userSubscription.planName === "Privilège VIP" || userSubscription.remainingSessions === 99;
+        
+        await updateDoc(userRef, {
+          "subscription.remainingSessions": isVIP ? 99 : userSubscription.remainingSessions - 1
+        });
+      }
+
+      await addDoc(collection(db, "bookings"), bookingData);
       navigate('/success');
     } catch (error) {
+      console.error("Erreur réservation:", error);
       alert(`Erreur : ${error.message}`);
     } finally {
       setIsUploading(false);
@@ -79,7 +118,17 @@ const BookingPage = () => {
     <div className="min-h-screen bg-white p-8 pt-24">
       <div className="max-w-7xl mx-auto">
         
-        {/* HEADER DYNAMIQUE AVEC ANIMATION BAS-HAUT */}
+        {/* STATUT MEMBRE VISIBLE SEULEMENT SI CONNECTÉ */}
+        {auth.currentUser && userSubscription && userSubscription.status === 'active' && (
+          <div className="mb-8 flex justify-center md:justify-start">
+            <div className="bg-black px-6 py-2 rounded-full border border-gray-800">
+              <span className="text-[10px] font-black uppercase text-white tracking-widest">
+                MEMBRE CLUB GYO • {userSubscription.remainingSessions === 99 ? "SÉANCES ILLIMITÉES" : `${userSubscription.remainingSessions} SÉANCES RESTANTES`}
+              </span>
+            </div>
+          </div>
+        )}
+
         <header className="mb-16 text-center md:text-left">
           <span className="text-purple-600 font-bold tracking-[0.4em] text-[10px] uppercase">Expérience GYO</span>
           <div className="mt-4 h-[120px] md:h-[150px] overflow-hidden">
@@ -101,19 +150,11 @@ const BookingPage = () => {
               </div>
             </h2>
           </div>
-          <p className="mt-2 text-gray-400 font-medium text-sm max-w-lg leading-relaxed">
-            Plongez dans l'univers GYO : Soins corps, Onglerie de précision et Salon de coiffure haute couture.
-          </p>
         </header>
 
-        {/* GRILLE DE SERVICES */}
         <main className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {services.map(service => (
-            <div 
-              key={service.id} 
-              onClick={() => setSelectedService(service)}
-              className="cursor-pointer group"
-            >
+            <div key={service.id} onClick={() => handleSelectService(service)} className="cursor-pointer group">
               <div className="transition-all duration-500 group-hover:-translate-y-2">
                 <ServiceCard {...service} />
               </div>
@@ -121,7 +162,6 @@ const BookingPage = () => {
           ))}
         </main>
 
-        {/* MODAL DE RÉSERVATION */}
         {selectedService && (
           <div className="fixed inset-0 bg-black/95 backdrop-blur-xl flex items-center justify-center z-[100] p-4">
             <div className="bg-white rounded-[3rem] max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col md:flex-row shadow-2xl">
@@ -145,11 +185,11 @@ const BookingPage = () => {
                 <h3 className="text-[10px] font-black uppercase tracking-widest mb-8 border-l-4 border-purple-600 pl-4">1. Vos Coordonnées</h3>
                 <div className="space-y-4 mb-10">
                   <div className="grid grid-cols-2 gap-4">
-                    <input name="firstName" placeholder="Prénom" onChange={handleInputChange} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm focus:ring-2 ring-purple-600/20 outline-none" />
-                    <input name="lastName" placeholder="Nom" onChange={handleInputChange} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm focus:ring-2 ring-purple-600/20 outline-none" />
+                    <input name="firstName" placeholder="Prénom" onChange={handleInputChange} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm outline-none" />
+                    <input name="lastName" placeholder="Nom" onChange={handleInputChange} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm outline-none" />
                   </div>
-                  <input name="email" type="email" placeholder="Email" onChange={handleInputChange} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm focus:ring-2 ring-purple-600/20 outline-none" />
-                  <input name="phone" type="tel" placeholder="Téléphone" onChange={handleInputChange} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm focus:ring-2 ring-purple-600/20 outline-none" />
+                  <input name="email" type="email" placeholder="Email" onChange={handleInputChange} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm outline-none" />
+                  <input name="phone" type="tel" placeholder="Téléphone" onChange={handleInputChange} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm outline-none" />
                 </div>
 
                 <h3 className="text-[10px] font-black uppercase tracking-widest mb-6 border-l-4 border-purple-600 pl-4">2. Créneau horaire</h3>
@@ -170,7 +210,11 @@ const BookingPage = () => {
                   onClick={handleConfirmBooking}
                   className={`w-full py-6 rounded-full font-black uppercase tracking-[0.2em] text-[10px] transition-all ${isUploading ? 'bg-gray-200 text-gray-400' : 'bg-black text-white hover:bg-purple-600'}`}
                 >
-                  {isUploading ? 'Traitement...' : 'Confirmer le rendez-vous'}
+                  {isUploading ? 'Traitement...' : (
+                    auth.currentUser && userSubscription && userSubscription.status === 'active' && userSubscription.remainingSessions > 0
+                    ? 'Confirmer avec mon abonnement'
+                    : 'Confirmer la réservation (Paiement salon)'
+                  )}
                 </button>
               </div>
 

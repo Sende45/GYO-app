@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase'; 
-import { doc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, serverTimestamp, Timestamp, increment } from 'firebase/firestore'; // Ajout de getDoc et increment
 
 const Subscriptions = () => {
   const [loadingPlan, setLoadingPlan] = useState(null);
@@ -49,30 +49,36 @@ const Subscriptions = () => {
     setLoadingPlan(plan.name);
 
     // --- MODE SIMULATION (En attendant CinetPay) ---
-    // On simule un délai de traitement de 2 secondes
     setTimeout(async () => {
       try {
         // 1. Calcul de la date d'expiration (+30 jours)
         const expiryDate = new Date();
         expiryDate.setDate(expiryDate.getDate() + 30);
 
-        // 2. Mise à jour du profil utilisateur dans Firestore
+        // 2. Récupération du profil actuel pour cumuler les séances
         const userRef = doc(db, "users", currentUser.uid);
+        const userDoc = await getDoc(userRef);
+        const currentSessions = userDoc.data()?.subscription?.remainingSessions || 0;
+
+        // 3. Mise à jour du profil utilisateur dans Firestore
         await updateDoc(userRef, {
           subscription: {
             planName: plan.name,
             status: "active",
             startDate: serverTimestamp(),
             expiryDate: Timestamp.fromDate(expiryDate),
-            remainingSessions: plan.sessions,
+            // On ajoute les nouvelles séances aux anciennes
+            remainingSessions: currentSessions + plan.sessions, 
             pricePaid: plan.price
-          }
+          },
+          // On peut aussi garder une trace de l'historique ici
+          lastPurchaseDate: serverTimestamp()
         });
 
         console.log(`Simulation réussie : Pack ${plan.name} activé pour ${currentUser.email}`);
         setLoadingPlan(null);
         
-        // 3. Redirection vers la page de succès
+        // 4. Redirection vers la page de succès
         navigate('/success');
 
       } catch (error) {
@@ -141,10 +147,10 @@ const Subscriptions = () => {
                 } ${loadingPlan === plan.name ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 {loadingPlan === plan.name ? (
-                   <div className="flex items-center gap-2">
-                     <div className="w-3 h-3 border-2 border-t-transparent border-white rounded-full animate-spin" />
-                     Vérification...
-                   </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 border-2 border-t-transparent border-white rounded-full animate-spin" />
+                      Traitement sécurisé...
+                    </div>
                 ) : "Devenir Membre"}
               </button>
             </div>
