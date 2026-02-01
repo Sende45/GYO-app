@@ -26,7 +26,7 @@ const BookingPage = () => {
 
   const [userData, setUserData] = useState({ firstName: '', lastName: '', email: '', phone: '' });
 
-  // Utilitaire pour le formatage FCFA
+  // --- UTILITAIRE FORMATAGE FCFA ---
   const formatFCFA = (amount) => {
     return new Intl.NumberFormat('fr-FR').format(amount) + ' FCFA';
   };
@@ -89,7 +89,7 @@ const BookingPage = () => {
     try {
       const hasActiveSub = auth.currentUser && userSubscription && userSubscription.status === 'active' && userSubscription.remainingSessions > 0;
       
-      // Détection s'il s'agit d'un achat de pack (basé sur la catégorie choisie dans l'admin)
+      // Détection s'il s'agit d'un achat de pack (basé sur la catégorie)
       const isPackPurchase = selectedService.category === "Abonnement";
 
       const bookingData = {
@@ -103,7 +103,7 @@ const BookingPage = () => {
         email: userData.email,
         phone: userData.phone,
         createdAt: serverTimestamp(),
-        // CHAMPS CRUCIAUX POUR L'ADMIN
+        // CHAMPS POUR L'ADMINISTRATION
         isPack: isPackPurchase,
         sessionsInPack: isPackPurchase ? (Number(selectedService.duration) || 1) : 0,
         paymentMethod: hasActiveSub ? "Abonnement (Session déduite)" : "Paiement au Salon",
