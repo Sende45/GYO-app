@@ -8,25 +8,46 @@ import '../booking.css';
 
 // FIREBASE
 import { db, auth } from "../firebase";
-import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc, onSnapshot, query, orderBy } from "firebase/firestore";
 
 const BookingPage = () => {
+  // --- ÉTATS ---
+  const [dbServices, setDbServices] = useState([]); // Services venant de Firebase
   const [selectedService, setSelectedService] = useState(null);
   const [date, setDate] = useState(new Date());
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isLoadingServices, setIsLoadingServices] = useState(true);
   
   const [userSubscription, setUserSubscription] = useState(null);
   const [titleIndex, setTitleIndex] = useState(0);
   const titles = ["VOTRE BIEN-ÊTRE", "VOTRE BEAUTÉ", "VOTRE STYLE"];
   const navigate = useNavigate();
 
+  const [userData, setUserData] = useState({ firstName: '', lastName: '', email: '', phone: '' });
+
+  // --- 1. RÉCUPÉRATION DES SERVICES DEPUIS L'ADMIN (FIREBASE) ---
+  useEffect(() => {
+    const q = query(collection(db, "prices"), orderBy("category", "asc"));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const servicesFromDb = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setDbServices(servicesFromDb);
+      setIsLoadingServices(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // --- 2. GESTION DU TITRE ET PROFIL ---
   useEffect(() => {
     const timer = setInterval(() => {
       setTitleIndex((prev) => (prev + 1) % titles.length);
     }, 3000);
 
-    // Récupération de l'abonnement SEULEMENT si connecté
     const fetchSubscription = async () => {
       if (auth.currentUser) {
         try {
@@ -36,7 +57,7 @@ const BookingPage = () => {
             setUserSubscription(userSnap.data().subscription || null);
           }
         } catch (error) {
-          console.error("Erreur récupération profil:", error);
+          console.error("Erreur profil:", error);
         }
       }
     };
@@ -45,19 +66,6 @@ const BookingPage = () => {
     return () => clearInterval(timer);
   }, []);
 
-  const [userData, setUserData] = useState({ firstName: '', lastName: '', email: '', phone: '' });
-
-  const services = [
-    { id: 1, title: "Massage Deep Tissue", duration: 60, price: 85, description: "Détente musculaire profonde." },
-    { id: 2, title: "Soin Visage Éclat", duration: 45, price: 60, description: "Nettoyage et luminosité." },
-    { id: 3, title: "Manucure Russe", duration: 50, price: 45, description: "Soin complet et cuticules." },
-    { id: 4, title: "Pédicure Spa", duration: 60, price: 55, description: "Beauté des pieds et relaxation." },
-    { id: 5, title: "Pose de Gel / Résine", duration: 90, price: 70, description: "Onglerie d'art et extensions." },
-    { id: 6, title: "Coupe Homme Premium", duration: 30, price: 35, description: "Dégradé et soin barbe." },
-    { id: 7, title: "Brushing Femme Pro", duration: 45, price: 40, description: "Shampoing et coiffage expert." },
-    { id: 8, title: "Coloration Experte", duration: 120, price: 110, description: "Technique de couleur sur mesure." }
-  ];
-
   const timeSlots = ["10:00", "11:30", "14:00", "15:30", "17:00", "18:30"];
 
   const handleInputChange = (e) => {
@@ -65,7 +73,6 @@ const BookingPage = () => {
   };
 
   const handleSelectService = (service) => {
-    // PLUS DE REDIRECTION : Tout le monde peut ouvrir le modal
     setSelectedService(service);
   };
 
@@ -77,16 +84,15 @@ const BookingPage = () => {
 
     setIsUploading(true);
     try {
-      // Logique d'abonnement (uniquement si l'utilisateur est connecté et possède un forfait)
       const hasActiveSub = auth.currentUser && userSubscription && userSubscription.status === 'active' && userSubscription.remainingSessions > 0;
 
       const bookingData = {
-        // Sécurité : on met l'UID si connecté, sinon on marque "GUEST"
         userId: auth.currentUser?.uid || "GUEST",
-        service: selectedService.title,
+        service: selectedService.name, // Changé de .title à .name (Firebase)
+        category: selectedService.category,
         date: date.toLocaleDateString('fr-FR'),
         time: selectedSlot,
-        price: selectedService.price,
+        price: selectedService.amount, // Changé de .price à .amount (Firebase)
         clientName: `${userData.firstName} ${userData.lastName}`,
         email: userData.email,
         phone: userData.phone,
@@ -98,7 +104,6 @@ const BookingPage = () => {
       if (hasActiveSub) {
         const userRef = doc(db, "users", auth.currentUser.uid);
         const isVIP = userSubscription.planName === "Privilège VIP" || userSubscription.remainingSessions === 99;
-        
         await updateDoc(userRef, {
           "subscription.remainingSessions": isVIP ? 99 : userSubscription.remainingSessions - 1
         });
@@ -107,7 +112,6 @@ const BookingPage = () => {
       await addDoc(collection(db, "bookings"), bookingData);
       navigate('/success');
     } catch (error) {
-      console.error("Erreur réservation:", error);
       alert(`Erreur : ${error.message}`);
     } finally {
       setIsUploading(false);
@@ -118,10 +122,10 @@ const BookingPage = () => {
     <div className="min-h-screen bg-white p-8 pt-24">
       <div className="max-w-7xl mx-auto">
         
-        {/* STATUT MEMBRE VISIBLE SEULEMENT SI CONNECTÉ */}
+        {/* STATUT MEMBRE */}
         {auth.currentUser && userSubscription && userSubscription.status === 'active' && (
           <div className="mb-8 flex justify-center md:justify-start">
-            <div className="bg-black px-6 py-2 rounded-full border border-gray-800">
+            <div className="bg-black px-6 py-2 rounded-full border border-gray-800 animate-pulse">
               <span className="text-[10px] font-black uppercase text-white tracking-widest">
                 MEMBRE CLUB GYO • {userSubscription.remainingSessions === 99 ? "SÉANCES ILLIMITÉES" : `${userSubscription.remainingSessions} SÉANCES RESTANTES`}
               </span>
@@ -152,19 +156,33 @@ const BookingPage = () => {
           </div>
         </header>
 
-        <main className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {services.map(service => (
-            <div key={service.id} onClick={() => handleSelectService(service)} className="cursor-pointer group">
-              <div className="transition-all duration-500 group-hover:-translate-y-2">
-                <ServiceCard {...service} />
+        {/* --- GRILLE DES SERVICES DYNAMIQUES --- */}
+        {isLoadingServices ? (
+          <div className="text-center py-20 text-gray-300 font-black uppercase tracking-widest animate-pulse">
+            Chargement des services GYO...
+          </div>
+        ) : (
+          <main className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {dbServices.map(service => (
+              <div key={service.id} onClick={() => handleSelectService(service)} className="cursor-pointer group">
+                <div className="transition-all duration-500 group-hover:-translate-y-2">
+                  {/* On adapte les props de ServiceCard car Firebase utilise name/amount/description */}
+                  <ServiceCard 
+                    title={service.name} 
+                    price={service.amount} 
+                    duration={service.duration} 
+                    description={service.category} // On peut afficher la catégorie ici
+                  />
+                </div>
               </div>
-            </div>
-          ))}
-        </main>
+            ))}
+          </main>
+        )}
 
+        {/* --- MODAL DE RÉSERVATION --- */}
         {selectedService && (
           <div className="fixed inset-0 bg-black/95 backdrop-blur-xl flex items-center justify-center z-[100] p-4">
-            <div className="bg-white rounded-[3rem] max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col md:flex-row shadow-2xl">
+            <div className="bg-white rounded-[3rem] max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col md:flex-row shadow-2xl animate-scaleUp">
               
               <div className="p-12 bg-gray-50/50 md:w-5/12 border-r border-gray-100 flex flex-col">
                 <button 
@@ -174,8 +192,9 @@ const BookingPage = () => {
                 >
                   ← Retour
                 </button>
-                <h2 className="text-4xl font-black text-black leading-tight uppercase mb-2">{selectedService.title}</h2>
-                <p className="text-purple-600 font-bold text-sm mb-10">{selectedService.duration} MIN — {selectedService.price}€</p>
+                <span className="text-[10px] font-black text-purple-600 uppercase mb-2 tracking-widest">{selectedService.category}</span>
+                <h2 className="text-4xl font-black text-black leading-tight uppercase mb-2">{selectedService.name}</h2>
+                <p className="text-gray-900 font-bold text-sm mb-10">{selectedService.duration} MIN — {selectedService.amount} CFA</p>
                 <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 scale-90 origin-left">
                   <Calendar onChange={setDate} value={date} className="border-none text-sm" />
                 </div>
@@ -208,12 +227,12 @@ const BookingPage = () => {
                 <button 
                   disabled={isUploading}
                   onClick={handleConfirmBooking}
-                  className={`w-full py-6 rounded-full font-black uppercase tracking-[0.2em] text-[10px] transition-all ${isUploading ? 'bg-gray-200 text-gray-400' : 'bg-black text-white hover:bg-purple-600'}`}
+                  className={`w-full py-6 rounded-full font-black uppercase tracking-[0.2em] text-[10px] transition-all ${isUploading ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-black text-white hover:bg-purple-600 shadow-xl'}`}
                 >
                   {isUploading ? 'Traitement...' : (
                     auth.currentUser && userSubscription && userSubscription.status === 'active' && userSubscription.remainingSessions > 0
                     ? 'Confirmer avec mon abonnement'
-                    : 'Confirmer la réservation (Paiement salon)'
+                    : `Réserver (${selectedService.amount} CFA)`
                   )}
                 </button>
               </div>
