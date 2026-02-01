@@ -12,7 +12,7 @@ import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc, onSnapshot
 
 const BookingPage = () => {
   // --- ÉTATS ---
-  const [dbServices, setDbServices] = useState([]); // Services venant de Firebase
+  const [dbServices, setDbServices] = useState([]); 
   const [selectedService, setSelectedService] = useState(null);
   const [date, setDate] = useState(new Date());
   const [selectedSlot, setSelectedSlot] = useState(null);
@@ -26,10 +26,14 @@ const BookingPage = () => {
 
   const [userData, setUserData] = useState({ firstName: '', lastName: '', email: '', phone: '' });
 
-  // --- 1. RÉCUPÉRATION DES SERVICES DEPUIS L'ADMIN (FIREBASE) ---
+  // Utilitaire pour le formatage FCFA
+  const formatFCFA = (amount) => {
+    return new Intl.NumberFormat('fr-FR').format(amount) + ' FCFA';
+  };
+
+  // --- 1. RÉCUPÉRATION DES SERVICES ---
   useEffect(() => {
     const q = query(collection(db, "prices"), orderBy("category", "asc"));
-    
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const servicesFromDb = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -38,7 +42,6 @@ const BookingPage = () => {
       setDbServices(servicesFromDb);
       setIsLoadingServices(false);
     });
-
     return () => unsubscribe();
   }, []);
 
@@ -62,7 +65,6 @@ const BookingPage = () => {
       }
     };
     fetchSubscription();
-
     return () => clearInterval(timer);
   }, []);
 
@@ -76,6 +78,7 @@ const BookingPage = () => {
     setSelectedService(service);
   };
 
+  // --- 3. CONFIRMATION DE RÉSERVATION ---
   const handleConfirmBooking = async () => {
     if (!selectedService || !selectedSlot) return alert("Veuillez sélectionner une heure.");
     if (!userData.firstName || !userData.lastName || !userData.email || !userData.phone) {
@@ -85,22 +88,29 @@ const BookingPage = () => {
     setIsUploading(true);
     try {
       const hasActiveSub = auth.currentUser && userSubscription && userSubscription.status === 'active' && userSubscription.remainingSessions > 0;
+      
+      // Détection s'il s'agit d'un achat de pack (basé sur la catégorie choisie dans l'admin)
+      const isPackPurchase = selectedService.category === "Abonnement";
 
       const bookingData = {
         userId: auth.currentUser?.uid || "GUEST",
-        service: selectedService.name, // Changé de .title à .name (Firebase)
+        service: selectedService.name,
         category: selectedService.category,
         date: date.toLocaleDateString('fr-FR'),
         time: selectedSlot,
-        price: selectedService.amount, // Changé de .price à .amount (Firebase)
+        price: Number(selectedService.amount),
         clientName: `${userData.firstName} ${userData.lastName}`,
         email: userData.email,
         phone: userData.phone,
         createdAt: serverTimestamp(),
-        paymentMethod: hasActiveSub ? "Abonnement" : "Paiement au Salon",
-        status: hasActiveSub ? "Confirmé (Membre)" : "En attente"
+        // CHAMPS CRUCIAUX POUR L'ADMIN
+        isPack: isPackPurchase,
+        sessionsInPack: isPackPurchase ? (Number(selectedService.duration) || 1) : 0,
+        paymentMethod: hasActiveSub ? "Abonnement (Session déduite)" : "Paiement au Salon",
+        status: hasActiveSub ? "Confirmé" : "En attente"
       };
 
+      // Si le client utilise une séance de son pack existant
       if (hasActiveSub) {
         const userRef = doc(db, "users", auth.currentUser.uid);
         const isVIP = userSubscription.planName === "Privilège VIP" || userSubscription.remainingSessions === 99;
@@ -156,7 +166,7 @@ const BookingPage = () => {
           </div>
         </header>
 
-        {/* --- GRILLE DES SERVICES DYNAMIQUES --- */}
+        {/* --- GRILLE DES SERVICES --- */}
         {isLoadingServices ? (
           <div className="text-center py-20 text-gray-300 font-black uppercase tracking-widest animate-pulse">
             Chargement des services GYO...
@@ -166,12 +176,11 @@ const BookingPage = () => {
             {dbServices.map(service => (
               <div key={service.id} onClick={() => handleSelectService(service)} className="cursor-pointer group">
                 <div className="transition-all duration-500 group-hover:-translate-y-2">
-                  {/* On adapte les props de ServiceCard car Firebase utilise name/amount/description */}
                   <ServiceCard 
                     title={service.name} 
-                    price={service.amount} 
-                    duration={service.duration} 
-                    description={service.category} // On peut afficher la catégorie ici
+                    price={formatFCFA(service.amount)} 
+                    duration={service.category === "Abonnement" ? `${service.duration} SÉANCES` : `${service.duration} MIN`} 
+                    description={service.category} 
                   />
                 </div>
               </div>
@@ -194,7 +203,9 @@ const BookingPage = () => {
                 </button>
                 <span className="text-[10px] font-black text-purple-600 uppercase mb-2 tracking-widest">{selectedService.category}</span>
                 <h2 className="text-4xl font-black text-black leading-tight uppercase mb-2">{selectedService.name}</h2>
-                <p className="text-gray-900 font-bold text-sm mb-10">{selectedService.duration} MIN — {selectedService.amount} CFA</p>
+                <p className="text-gray-900 font-bold text-sm mb-10">
+                  {selectedService.category === "Abonnement" ? `${selectedService.duration} SÉANCES` : `${selectedService.duration} MIN`} — {formatFCFA(selectedService.amount)}
+                </p>
                 <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 scale-90 origin-left">
                   <Calendar onChange={setDate} value={date} className="border-none text-sm" />
                 </div>
@@ -232,7 +243,7 @@ const BookingPage = () => {
                   {isUploading ? 'Traitement...' : (
                     auth.currentUser && userSubscription && userSubscription.status === 'active' && userSubscription.remainingSessions > 0
                     ? 'Confirmer avec mon abonnement'
-                    : `Réserver (${selectedService.amount} CFA)`
+                    : `Réserver (${formatFCFA(selectedService.amount)})`
                   )}
                 </button>
               </div>
