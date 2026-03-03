@@ -1,7 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase'; 
-import { doc, updateDoc, getDoc, serverTimestamp, Timestamp, increment } from 'firebase/firestore'; // Ajout de getDoc et increment
+import { doc, updateDoc, getDoc, serverTimestamp, Timestamp, increment } from 'firebase/firestore'; 
+import { loadStripe } from '@stripe/stripe-js';
+// AJOUT : Importation des outils Functions
+import { getFunctions, httpsCallable } from 'firebase/functions';
+
+const stripePromise = loadStripe('pk_test_VOTRE_CLE_PUBLIQUE');
 
 const Subscriptions = () => {
   const [loadingPlan, setLoadingPlan] = useState(null);
@@ -9,6 +14,7 @@ const Subscriptions = () => {
 
   const plans = [
     {
+      id: "price_1...", // ID Stripe
       name: "Sérénité Solo",
       price: "35000",
       displayPrice: "35.000",
@@ -18,6 +24,7 @@ const Subscriptions = () => {
       sessions: 1
     },
     {
+      id: "price_2...", // ID Stripe
       name: "Luxe Illimité",
       price: "65000",
       displayPrice: "65.000",
@@ -27,6 +34,7 @@ const Subscriptions = () => {
       sessions: 2
     },
     {
+      id: "price_3...", // ID Stripe
       name: "Privilège VIP",
       price: "150000",
       displayPrice: "150.000",
@@ -48,45 +56,36 @@ const Subscriptions = () => {
 
     setLoadingPlan(plan.name);
 
-    // --- MODE SIMULATION (En attendant CinetPay) ---
-    setTimeout(async () => {
-      try {
-        // 1. Calcul de la date d'expiration (+30 jours)
-        const expiryDate = new Date();
-        expiryDate.setDate(expiryDate.getDate() + 30);
+    try {
+      // 1. Initialiser Firebase Functions
+      const functions = getFunctions();
+      const createStripeSession = httpsCallable(functions, 'createStripeCheckout');
 
-        // 2. Récupération du profil actuel pour cumuler les séances
-        const userRef = doc(db, "users", currentUser.uid);
-        const userDoc = await getDoc(userRef);
-        const currentSessions = userDoc.data()?.subscription?.remainingSessions || 0;
+      // 2. Appeler la fonction backend
+      const result = await createStripeSession({
+        priceId: plan.id,
+        planName: plan.name,
+        sessionsCount: plan.sessions,
+      });
 
-        // 3. Mise à jour du profil utilisateur dans Firestore
-        await updateDoc(userRef, {
-          subscription: {
-            planName: plan.name,
-            status: "active",
-            startDate: serverTimestamp(),
-            expiryDate: Timestamp.fromDate(expiryDate),
-            // On ajoute les nouvelles séances aux anciennes
-            remainingSessions: currentSessions + plan.sessions, 
-            pricePaid: plan.price
-          },
-          // On peut aussi garder une trace de l'historique ici
-          lastPurchaseDate: serverTimestamp()
-        });
+      const sessionId = result.data.sessionId;
 
-        console.log(`Simulation réussie : Pack ${plan.name} activé pour ${currentUser.email}`);
-        setLoadingPlan(null);
-        
-        // 4. Redirection vers la page de succès
-        navigate('/success');
+      // 3. Redirection vers Stripe Checkout
+      const stripe = await stripePromise;
+      const { error } = await stripe.redirectToCheckout({
+        sessionId: sessionId,
+      });
 
-      } catch (error) {
-        console.error("Erreur lors de la simulation :", error);
-        alert("Une erreur est survenue lors de l'activation.");
+      if (error) {
+        console.error("Erreur Stripe redirection:", error);
         setLoadingPlan(null);
       }
-    }, 2000);
+
+    } catch (error) {
+      console.error("Erreur lors de l'appel Cloud Function :", error);
+      alert("Une erreur est survenue lors de l'initialisation du paiement.");
+      setLoadingPlan(null);
+    }
   };
 
   return (
@@ -149,7 +148,7 @@ const Subscriptions = () => {
                 {loadingPlan === plan.name ? (
                     <div className="flex items-center gap-2">
                       <div className="w-3 h-3 border-2 border-t-transparent border-white rounded-full animate-spin" />
-                      Traitement sécurisé...
+                      Sécurisation...
                     </div>
                 ) : "Devenir Membre"}
               </button>
