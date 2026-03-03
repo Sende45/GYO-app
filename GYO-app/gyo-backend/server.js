@@ -1,16 +1,32 @@
+// 1. TOUJOURS CHARGER DOTENV EN PREMIER
+require('dotenv').config(); 
+
 const express = require('express');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const admin = require('firebase-admin');
 const cors = require('cors');
-require('dotenv').config();
+const path = require('path');
 
 const app = express();
 
-// Configuration Firebase Admin (Indispensable pour toucher à ta DB)
-const serviceAccount = require("./serviceAccountKey.json");
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
-});
+// Vérification console pour Stripe
+console.log("Clé Stripe chargée :", process.env.STRIPE_SECRET_KEY ? "OUI ✅" : "NON ❌");
+
+// --- CONFIGURATION FIREBASE ---
+try {
+    // On cherche le fichier renommé : serviceAccount.json
+    const serviceAccountPath = path.join(__dirname, "serviceAccount.json");
+    const serviceAccount = require(serviceAccountPath);
+
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount)
+    });
+    console.log("Firebase Admin initialisé : OUI ✅");
+} catch (error) {
+    console.error("❌ ERREUR FIREBASE : Fichier 'serviceAccount.json' introuvable.");
+    console.error("Vérifie que tu as bien renommé ton fichier JSON dans le dossier gyo-backend.");
+    process.exit(1); 
+}
 
 const db = admin.firestore();
 
@@ -25,18 +41,23 @@ app.post('/create-checkout-session', express.json(), async (req, res) => {
       payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],
       mode: 'subscription',
-      success_url: 'https://votre-site-gyo.web.app/success',
+      success_url: 'https://votre-site-gyo.web.app/success', 
       cancel_url: 'https://votre-site-gyo.web.app/subscriptions',
       customer_email: email,
-      metadata: { userId, sessionsCount, planName }
+      metadata: { 
+        userId: userId, 
+        sessionsCount: sessionsCount ? sessionsCount.toString() : "0", 
+        planName: planName 
+      }
     });
     res.json({ id: session.id });
   } catch (error) {
+    console.error("Erreur Session:", error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Route 2 : Le Webhook (Appelé par Stripe après paiement)
+// Route 2 : Le Webhook
 app.post('/webhook', express.raw({type: 'application/json'}), async (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
@@ -44,6 +65,7 @@ app.post('/webhook', express.raw({type: 'application/json'}), async (req, res) =
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
   } catch (err) {
+    console.error("Erreur Webhook Signature:", err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
@@ -51,26 +73,34 @@ app.post('/webhook', express.raw({type: 'application/json'}), async (req, res) =
     const session = event.data.object;
     const { userId, sessionsCount, planName } = session.metadata;
 
+    console.log(`💰 Paiement réussi pour l'utilisateur : ${userId}`);
+
     const expiryDate = new Date();
     expiryDate.setDate(expiryDate.getDate() + 30);
 
-    // Mise à jour Firestore
-    const userRef = db.collection("users").doc(userId);
-    const userDoc = await userRef.get();
-    const currentSessions = userDoc.data()?.subscription?.remainingSessions || 0;
+    try {
+      const userRef = db.collection("users").doc(userId);
+      const userDoc = await userRef.get();
+      
+      const currentSessions = userDoc.exists ? (userDoc.data()?.subscription?.remainingSessions || 0) : 0;
 
-    await userRef.update({
-      subscription: {
-        planName,
-        status: "active",
-        expiryDate: admin.firestore.Timestamp.fromDate(expiryDate),
-        remainingSessions: currentSessions + parseInt(sessionsCount),
-      },
-      lastPurchaseDate: admin.firestore.FieldValue.serverTimestamp()
-    });
+      await userRef.set({
+        subscription: {
+          planName: planName,
+          status: "active",
+          expiryDate: admin.firestore.Timestamp.fromDate(expiryDate),
+          remainingSessions: currentSessions + parseInt(sessionsCount),
+        },
+        lastPurchaseDate: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      console.log("✅ Firestore mis à jour avec succès !");
+    } catch (dbError) {
+      console.error("❌ Erreur Firestore:", dbError);
+    }
   }
   res.json({received: true});
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Serveur GYO actif sur le port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Serveur GYO actif sur le port ${PORT}`));
