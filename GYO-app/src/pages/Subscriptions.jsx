@@ -13,7 +13,7 @@ const Subscriptions = () => {
   // REMPLACE LES "price_..." PAR TES VRAIS IDS DE PRODUITS STRIPE
   const plans = [
     {
-      id: "price_1QuRkX...", 
+      id: "prod_U55wrSvccDD8bj",
       name: "Sérénité Solo",
       price: "35000",
       displayPrice: "35.000",
@@ -23,7 +23,7 @@ const Subscriptions = () => {
       sessions: 1
     },
     {
-      id: "price_1QuRl6...", 
+      id: "prod_U55yWLxuGXCXZT", 
       name: "Luxe Illimité",
       price: "65000",
       displayPrice: "65.000",
@@ -33,7 +33,7 @@ const Subscriptions = () => {
       sessions: 2
     },
     {
-      id: "price_1QuRlY...", 
+      id: "prod_U55zH6lPGi8TkE", 
       name: "Privilège VIP",
       price: "150000",
       displayPrice: "150.000",
