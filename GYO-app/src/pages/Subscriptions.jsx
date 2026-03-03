@@ -1,20 +1,19 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { auth, db } from '../firebase'; 
-import { doc, updateDoc, getDoc, serverTimestamp, Timestamp, increment } from 'firebase/firestore'; 
+import { auth } from '../firebase'; 
 import { loadStripe } from '@stripe/stripe-js';
-// AJOUT : Importation des outils Functions
-import { getFunctions, httpsCallable } from 'firebase/functions';
 
-const stripePromise = loadStripe('pk_test_VOTRE_CLE_PUBLIQUE');
+// REMPLACE PAR TA VRAIE CLÉ PUBLIQUE STRIPE (Dashboard Stripe > Développeurs)
+const stripePromise = loadStripe('pk_test_51T17ReIImwaKuwtjOtgouWGzsbeCpiIiWHL98WKatEkUTdrr2K10dQcLVCJ2YvB1iX0qqlV9xRnhTXHUigx52wvO00g9jmgu4J');
 
 const Subscriptions = () => {
   const [loadingPlan, setLoadingPlan] = useState(null);
   const navigate = useNavigate();
 
+  // REMPLACE LES "price_..." PAR TES VRAIS IDS DE PRODUITS STRIPE
   const plans = [
     {
-      id: "price_1...", // ID Stripe
+      id: "price_1QuRkX...", 
       name: "Sérénité Solo",
       price: "35000",
       displayPrice: "35.000",
@@ -24,7 +23,7 @@ const Subscriptions = () => {
       sessions: 1
     },
     {
-      id: "price_2...", // ID Stripe
+      id: "price_1QuRl6...", 
       name: "Luxe Illimité",
       price: "65000",
       displayPrice: "65.000",
@@ -34,7 +33,7 @@ const Subscriptions = () => {
       sessions: 2
     },
     {
-      id: "price_3...", // ID Stripe
+      id: "price_1QuRlY...", 
       name: "Privilège VIP",
       price: "150000",
       displayPrice: "150.000",
@@ -57,23 +56,31 @@ const Subscriptions = () => {
     setLoadingPlan(plan.name);
 
     try {
-      // 1. Initialiser Firebase Functions
-      const functions = getFunctions();
-      const createStripeSession = httpsCallable(functions, 'createStripeCheckout');
-
-      // 2. Appeler la fonction backend
-      const result = await createStripeSession({
-        priceId: plan.id,
-        planName: plan.name,
-        sessionsCount: plan.sessions,
+      // 1. APPEL À TON SERVEUR RENDER
+      const response = await fetch('https://gyo-backend.onrender.com/create-checkout-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          priceId: plan.id,
+          userId: currentUser.uid,
+          email: currentUser.email,
+          planName: plan.name,
+          sessionsCount: plan.sessions,
+        }),
       });
 
-      const sessionId = result.data.sessionId;
+      const session = await response.json();
 
-      // 3. Redirection vers Stripe Checkout
+      if (session.error) {
+        throw new Error(session.error);
+      }
+
+      // 2. REDIRECTION VERS STRIPE CHECKOUT
       const stripe = await stripePromise;
       const { error } = await stripe.redirectToCheckout({
-        sessionId: sessionId,
+        sessionId: session.id,
       });
 
       if (error) {
@@ -82,8 +89,8 @@ const Subscriptions = () => {
       }
 
     } catch (error) {
-      console.error("Erreur lors de l'appel Cloud Function :", error);
-      alert("Une erreur est survenue lors de l'initialisation du paiement.");
+      console.error("Erreur lors de l'initialisation du paiement :", error);
+      alert("Une erreur est survenue lors de la connexion au serveur de paiement.");
       setLoadingPlan(null);
     }
   };
