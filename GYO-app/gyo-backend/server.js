@@ -16,13 +16,10 @@ console.log("Clé Stripe chargée :", process.env.STRIPE_SECRET_KEY ? "OUI ✅" 
 try {
     let serviceAccount;
 
-    // Vérifie si on est sur Render (via la variable d'environnement)
     if (process.env.FIREBASE_SERVICE_ACCOUNT) {
         console.log("Mode : Chargement Firebase via Variable d'environnement (Render) ☁️");
         serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-    } 
-    // Sinon, on est en local sur ton PC
-    else {
+    } else {
         console.log("Mode : Chargement Firebase via fichier local (PC) 💻");
         const serviceAccountPath = path.join(__dirname, "serviceAccount.json");
         serviceAccount = require(serviceAccountPath);
@@ -36,7 +33,6 @@ try {
     console.log("Firebase Admin initialisé : OUI ✅");
 } catch (error) {
     console.error("❌ ERREUR FIREBASE :", error.message);
-    // On ne coupe le serveur que si aucune config n'est trouvée
     if (!process.env.FIREBASE_SERVICE_ACCOUNT && !path.join(__dirname, "serviceAccount.json")) {
         process.exit(1);
     }
@@ -44,7 +40,12 @@ try {
 
 const db = admin.firestore();
 
-app.use(cors());
+// --- CONFIGURATION CORS (AUTORISE TON VERCEL) ---
+app.use(cors({
+    origin: ['https://gyo-app.vercel.app', 'http://localhost:3000'],
+    methods: ['GET', 'POST'],
+    credentials: true
+}));
 
 // Route 1 : Créer la session de paiement
 app.post('/create-checkout-session', express.json(), async (req, res) => {
@@ -55,8 +56,9 @@ app.post('/create-checkout-session', express.json(), async (req, res) => {
             payment_method_types: ['card'],
             line_items: [{ price: priceId, quantity: 1 }],
             mode: 'subscription',
-            success_url: 'https://votre-site-gyo.web.app/success', 
-            cancel_url: 'https://votre-site-gyo.web.app/subscriptions',
+            // MISES À JOUR DES URLS :
+            success_url: 'https://gyo-app.vercel.app/success', 
+            cancel_url: 'https://gyo-app.vercel.app/subscriptions',
             customer_email: email,
             metadata: { 
                 userId: userId, 
@@ -64,14 +66,17 @@ app.post('/create-checkout-session', express.json(), async (req, res) => {
                 planName: planName 
             }
         });
-        res.json({ id: session.id });
+
+        // MODIFICATION : On renvoie TOUTE la session (incluant l'URL pour le frontend)
+        res.json(session); 
+        
     } catch (error) {
         console.error("Erreur Session:", error);
         res.status(500).json({ error: error.message });
     }
 });
 
-// Route 2 : Le Webhook (Indispensable pour mettre à jour Firestore)
+// Route 2 : Le Webhook
 app.post('/webhook', express.raw({type: 'application/json'}), async (req, res) => {
     const sig = req.headers['stripe-signature'];
     let event;
@@ -116,6 +121,5 @@ app.post('/webhook', express.raw({type: 'application/json'}), async (req, res) =
     res.json({received: true});
 });
 
-// Utilisation dynamique du port pour Render
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Serveur GYO actif sur le port ${PORT}`));

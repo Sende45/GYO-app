@@ -3,14 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { auth } from '../firebase'; 
 import { loadStripe } from '@stripe/stripe-js';
 
-// REMPLACE PAR TA VRAIE CLÉ PUBLIQUE STRIPE (Dashboard Stripe > Développeurs)
+// Clé publique Stripe
 const stripePromise = loadStripe('pk_test_51T17ReIImwaKuwtjOtgouWGzsbeCpiIiWHL98WKatEkUTdrr2K10dQcLVCJ2YvB1iX0qqlV9xRnhTXHUigx52wvO00g9jmgu4J');
 
 const Subscriptions = () => {
   const [loadingPlan, setLoadingPlan] = useState(null);
   const navigate = useNavigate();
 
-  // REMPLACE LES "price_..." PAR TES VRAIS IDS DE PRODUITS STRIPE
+  // IDs de prix Stripe (price_...)
   const plans = [
     {
       id: "price_1T6vkGIImwaKuwtjMWb9PUKj",
@@ -77,15 +77,12 @@ const Subscriptions = () => {
         throw new Error(session.error);
       }
 
-      // 2. REDIRECTION VERS STRIPE CHECKOUT
-      const stripe = await stripePromise;
-      const { error } = await stripe.redirectToCheckout({
-        sessionId: session.id,
-      });
-
-      if (error) {
-        console.error("Erreur Stripe redirection:", error);
-        setLoadingPlan(null);
+      // 2. NOUVELLE MÉTHODE : Redirection directe via l'URL fournie par le serveur
+      // C'est la solution pour l'erreur "redirectToCheckout is no longer supported"
+      if (session.url) {
+        window.location.href = session.url;
+      } else {
+        throw new Error("Impossible de générer l'URL de paiement.");
       }
 
     } catch (error) {
