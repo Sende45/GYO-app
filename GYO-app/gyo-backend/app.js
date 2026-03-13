@@ -20,7 +20,7 @@ app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
 // Parser JSON pour tout le reste
 app.use(express.json());
 
-// ✅ CONFIGURATION CORS DYNAMIQUE (Fix pour Vercel Preview)
+// ✅ CONFIGURATION CORS DYNAMIQUE (Fix pour Vercel Preview & Custom Headers)
 const allowedOrigins = [
     'https://gyo-app.vercel.app', 
     'http://localhost:3000', 
@@ -34,7 +34,7 @@ app.use(cors({
         
         // Autorise les domaines dans la liste OR les domaines de preview Vercel
         const isAllowed = allowedOrigins.includes(origin) || 
-                         origin.endsWith('.vercel.app'); // ✅ Autorise tous les sous-domaines Vercel
+                         origin.endsWith('.vercel.app'); 
 
         if (isAllowed) {
             callback(null, true);
@@ -45,7 +45,15 @@ app.use(cors({
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization', 'stripe-signature']
+    // 🔥 AJOUT DES HEADERS AUTORISÉS 🔥
+    // On ajoute 'x-user-id' et 'x-user-email' pour que le frontend puisse s'identifier
+    allowedHeaders: [
+        'Content-Type', 
+        'Authorization', 
+        'stripe-signature', 
+        'x-user-id', 
+        'x-user-email'
+    ]
 }));
 
 // --- DÉCLARATION DES ROUTES API ---
