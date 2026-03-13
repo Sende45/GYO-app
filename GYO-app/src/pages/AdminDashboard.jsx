@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import logo from '../assets/logo.png';
-import { auth } from '../firebase';
-import api from '../api/axios'; // Utilisation de l'instance centralisée
+import api from '../api/axios'; 
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from 'recharts';
@@ -25,28 +24,14 @@ const AdminDashboard = () => {
 
   const formatCurrency = (amount) => new Intl.NumberFormat('fr-FR').format(amount);
 
-  // --- CONFIGURATION SÉCURISÉE DES REQUÊTES ---
-  const getAuthConfig = async () => {
-    const user = auth.currentUser;
-    if (!user) throw new Error("Non authentifié");
-    const token = await user.getIdToken();
-    return {
-      headers: { 
-        Authorization: `Bearer ${token}`,
-        'x-user-id': user.uid // Pour ton middleware verifyAdmin
-      }
-    };
-  };
-
   // --- 1. CHARGEMENT GLOBAL DES DONNÉES ---
   const fetchAllData = async () => {
     try {
-      const config = await getAuthConfig();
-
+      // Les headers (x-user-email) sont gérés automatiquement par l'intercepteur Axios
       const [bookings, prices, users] = await Promise.all([
-        api.get('/bookings', config),
-        api.get('/prices', config),
-        api.get('/users/all', config)
+        api.get('/bookings'),
+        api.get('/prices'),
+        api.get('/users/all')
       ]);
 
       setData({
@@ -64,25 +49,25 @@ const AdminDashboard = () => {
     } catch (err) {
       console.error("Erreur Dashboard Sync:", err);
       if (err.response?.status === 401 || err.response?.status === 403) {
-        alert("Accès non autorisé : Vous n'êtes pas administrateur GYO.");
-        navigate('/admin');
+        navigate('/admin', { replace: true });
       }
     }
   };
 
-  useEffect(() => { 
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      if (user) fetchAllData();
-      else navigate('/admin');
-    });
-    return () => unsubscribe();
-  }, []);
+  // --- 2. SÉCURITÉ AU CHARGEMENT ---
+  useEffect(() => {
+    const userData = localStorage.getItem('gyo_user');
+    if (!userData) {
+      navigate('/admin', { replace: true });
+    } else {
+      fetchAllData();
+    }
+  }, [navigate]);
 
-  // --- 2. ACTIONS CRUD ---
+  // --- 3. ACTIONS CRUD (TES FONCTIONNALITÉS) ---
   const handleValidateBooking = async (id) => {
     try {
-      const config = await getAuthConfig();
-      await api.put(`/bookings/${id}/confirm`, {}, config);
+      await api.put(`/bookings/${id}/confirm`, {});
       alert("✅ Réservation confirmée");
       fetchAllData();
     } catch (e) { alert("Erreur validation : " + e.message); }
@@ -91,9 +76,9 @@ const AdminDashboard = () => {
   const handleAddPrice = async (e) => {
     e.preventDefault();
     try {
-      const config = await getAuthConfig();
-      await api.post('/prices', newPriceData, config);
+      await api.post('/prices', newPriceData);
       setIsPriceModalOpen(false);
+      setNewPriceData({ name: '', amount: '', category: 'Massage Signature GYO', duration: '', description: '', stripePriceId: '' });
       fetchAllData();
       alert("✅ Service ajouté");
     } catch (e) { alert("Erreur ajout : " + e.message); }
@@ -102,11 +87,15 @@ const AdminDashboard = () => {
   const handleDelete = async (id, type) => {
     if(!window.confirm("🚨 Action irréversible. Confirmer ?")) return;
     try {
-      const config = await getAuthConfig();
       const route = type === 'bookings' ? 'bookings' : 'prices';
-      await api.delete(`/${route}/${id}`, config);
+      await api.delete(`/${route}/${id}`);
       fetchAllData();
     } catch (e) { alert("Erreur suppression : " + e.message); }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('gyo_user');
+    navigate('/admin', { replace: true });
   };
 
   const filteredData = (list) => {
@@ -129,22 +118,23 @@ const AdminDashboard = () => {
         <div className="flex items-center gap-6">
           <img src={logo} alt="GYO" className="h-8" />
           <div className="h-6 w-[1px] bg-zinc-200" />
-          <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400 italic">Admin_System_v4</span>
+          <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400 italic">Admin_System_v2</span>
         </div>
         <div className="flex items-center gap-6">
           <div className="flex flex-col items-end">
              <span className="text-xs font-black uppercase tracking-tight">Manager_GYO</span>
              <span className="text-[9px] text-green-500 font-bold uppercase tracking-widest flex items-center gap-1 italic">
-               <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" /> MongoDB_Live
+                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" /> MongoDB_Live
              </span>
           </div>
-          <button onClick={() => auth.signOut()} className="p-3 bg-zinc-100 hover:bg-red-50 text-zinc-400 hover:text-red-500 rounded-2xl transition-all">
+          <button onClick={handleLogout} className="p-3 bg-zinc-100 hover:bg-red-50 text-zinc-400 hover:text-red-500 rounded-2xl transition-all">
             <FiLogOut size={18} />
           </button>
         </div>
       </nav>
 
-      {/* Modal Prix */}
+      {/* --- RESTE DU JSX (INCHANGÉ POUR TES FONCTIONNALITÉS) --- */}
+      {/* Modal, KPI, Charts, Filtres, Tableaux... Tout est là ! */}
       {isPriceModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-white w-full max-w-lg rounded-[2.5rem] p-10 shadow-2xl relative">
@@ -186,16 +176,16 @@ const AdminDashboard = () => {
             { label: 'Status', val: 'Online', icon: <FiActivity />, color: 'text-green-500', bg: 'bg-green-50' },
           ].map((kpi, i) => (
             <div key={i} className="bg-white p-6 rounded-[2rem] shadow-sm border border-zinc-100 flex items-center gap-6">
-               <div className={`p-4 rounded-2xl ${kpi.bg} ${kpi.color} text-xl`}>{kpi.icon}</div>
-               <div>
+                <div className={`p-4 rounded-2xl ${kpi.bg} ${kpi.color} text-xl`}>{kpi.icon}</div>
+                <div>
                   <p className="text-[10px] font-black uppercase text-zinc-400 tracking-widest italic">{kpi.label}</p>
                   <p className="text-2xl font-black">{kpi.val}</p>
-               </div>
+                </div>
             </div>
           ))}
         </div>
 
-        {/* Charts */}
+        {/* Graphique */}
         <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-zinc-100">
            <h3 className="text-sm font-black uppercase tracking-widest text-zinc-400 mb-8 italic">Flux d'activité</h3>
            <div className="h-[300px] w-full">
@@ -234,7 +224,7 @@ const AdminDashboard = () => {
           </div>
         </div>
 
-        {/* Tableaux de Données */}
+        {/* Tableaux (Données filtrées) */}
         <div className="bg-white rounded-[2.5rem] shadow-xl border border-zinc-100 overflow-hidden">
           {filter === 'Réservations' && (
             <div className="p-4 overflow-x-auto">
