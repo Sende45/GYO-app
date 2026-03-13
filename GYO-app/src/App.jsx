@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
 import { auth } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
+import useGyoStore from './store/useGyoStore'; // ✅ Ton nouveau store
 
 // IMPORT DU LOGO
 import logo from './assets/logo.png'; 
@@ -21,21 +22,21 @@ import Login from './pages/Login';
 import Footer from './components/Footer';
 
 function App() {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  // ✅ On utilise l'état global du store
+  const { user, setUser, logout } = useGyoStore();
+  const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
 
-  // ✅ SYNC AUTH : Firebase + MongoDB
   useEffect(() => {
-    // 1. Écouter Firebase
+    // 1. Sync avec Firebase pour les clients
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       const mongoUser = localStorage.getItem('gyo_user');
       
       if (mongoUser) {
-        // Priorité à la session MongoDB (Admin/Staff)
+        // Priorité absolue à la session MongoDB (Staff/Admin)
         setUser(JSON.parse(mongoUser));
       } else if (firebaseUser) {
-        // Repli sur Firebase pour les clients existants
+        // Repli Firebase (Clients)
         setUser(firebaseUser);
       } else {
         setUser(null);
@@ -44,7 +45,7 @@ function App() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [setUser]);
 
   const closeMenu = () => setIsMenuOpen(false);
 
@@ -70,6 +71,7 @@ function App() {
           </span>
         </Link>
         
+        {/* Menu Desktop */}
         <div className="hidden lg:flex space-x-8 font-bold text-[10px] uppercase tracking-[0.2em] text-gyo-black items-center">
           <Link to="/" className="hover:text-gyo-purple transition-colors">Accueil</Link>
           <Link to="/reserver" className="hover:text-gyo-purple transition-colors">Réservations</Link>
@@ -83,9 +85,11 @@ function App() {
             {!user ? (
               <Link to="/login" className="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-gyo-black transition-colors">Connexion</Link>
             ) : (
-              <Link to="/mon-compte" className="w-8 h-8 md:w-10 md:h-10 bg-purple-100 rounded-full flex items-center justify-center text-[10px] font-black text-gyo-purple uppercase border border-purple-200 shadow-sm">
-                {user.email?.charAt(0) || user.displayName?.charAt(0)}
-              </Link>
+              <div className="flex items-center gap-3">
+                <Link to="/mon-compte" className="w-8 h-8 md:w-10 md:h-10 bg-purple-100 rounded-full flex items-center justify-center text-[10px] font-black text-gyo-purple uppercase border border-purple-200 shadow-sm">
+                  {user.email?.charAt(0) || user.displayName?.charAt(0)}
+                </Link>
+              </div>
             )}
           </div>
 
@@ -99,6 +103,7 @@ function App() {
           </button>
         </div>
 
+        {/* Menu Mobile */}
         <div className={`fixed inset-0 bg-white/98 backdrop-blur-xl z-[100] flex flex-col items-center justify-center space-y-6 transition-all duration-500 ease-in-out ${isMenuOpen ? 'opacity-100 visible' : 'opacity-0 invisible pointer-events-none'}`}>
           <div className="flex flex-col items-center space-y-8">
              <Link to="/" onClick={closeMenu} className="text-3xl font-black uppercase tracking-tighter hover:text-gyo-purple transition-all">Accueil</Link>
@@ -119,11 +124,11 @@ function App() {
           <Route path="/success" element={<SuccessPage />} />
           <Route path="/login" element={<Login />} />
           
-          {/* ✅ ROUTES PROTÉGÉES AMÉLIORÉES */}
+          {/* ✅ ROUTES PROTÉGÉES */}
           <Route path="/offrir" element={user ? <GiftCards /> : <Navigate to="/login" replace />} />
           <Route path="/mon-compte" element={user ? <UserAccount /> : <Navigate to="/login" replace />} />
           
-          {/* ✅ PROTECTION DASHBOARD */}
+          {/* ✅ PROTECTION DASHBOARD STAFF */}
           <Route path="/admin-dashboard" element={
             (user && (user.role === 'admin' || user.role === 'agent')) 
             ? <AdminDashboard /> 
