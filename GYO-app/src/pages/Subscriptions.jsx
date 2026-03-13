@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../firebase'; 
-import axios from 'axios'; // On passe sur axios pour plus de propreté
+import api from '../api/axios'; // Import de ton instance configurée
 
 const Subscriptions = () => {
   const [plans, setPlans] = useState([]);
@@ -9,12 +9,11 @@ const Subscriptions = () => {
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const navigate = useNavigate();
 
-  // 1. CHARGEMENT DYNAMIQUE DEPUIS MONGODB
   useEffect(() => {
     const fetchPlans = async () => {
       try {
-        const response = await axios.get('https://gyo-backend.onrender.com/api/prices');
-        // On filtre uniquement les abonnements configurés dans ta collection
+        // L'URL devient automatiquement : baseURL + '/prices'
+        const response = await api.get('/prices');
         const subs = response.data.filter(p => p.category === 'Abonnement');
         setPlans(subs);
       } catch (err) {
@@ -38,19 +37,17 @@ const Subscriptions = () => {
     setLoadingPlan(plan.name);
 
     try {
-      // 2. APPEL À TON SERVEUR RENDER (PaymentController)
-      // On envoie les infos nécessaires pour que MongoDB et Stripe s'accordent
-      const response = await axios.post('https://gyo-backend.onrender.com/api/payments/create-checkout-session', {
-        priceId: plan.stripePriceId, // Utilise le champ de ta collection MongoDB
+      // Utilisation de l'instance pour le POST
+      const response = await api.post('/payments/create-checkout-session', {
+        priceId: plan.stripePriceId, 
         userId: currentUser.uid,
         email: currentUser.email,
         planName: plan.name,
-        sessionsCount: plan.duration, // Dans ton modèle MongoDB, duration = nb de séances pour un pack
-        isSubscription: true,        // Force le mode 'subscription' sur Stripe
-        category: 'Abonnement'       // Pour que le Webhook sache quoi faire
+        sessionsCount: plan.duration, 
+        isSubscription: true,        
+        category: 'Abonnement'       
       });
 
-      // 3. REDIRECTION SÉCURISÉE
       if (response.data.url) {
         window.location.href = response.data.url;
       } else {
@@ -58,31 +55,33 @@ const Subscriptions = () => {
       }
 
     } catch (error) {
-      console.error("Erreur initialisation paiement :", error);
-      alert("Erreur de connexion au service de paiement GYO.");
+      console.error("Erreur paiement :", error);
+      alert("Erreur de connexion au service Stripe. Vérifiez votre connexion.");
       setLoadingPlan(null);
     }
   };
 
+  // ... (Le reste du JSX reste identique, c'est juste la logique API qui est purifiée)
   if (isInitialLoading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center space-y-4">
         <div className="w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin" />
+        <p className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.3em]">Initialisation du Club GYO...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black py-24 px-6 overflow-hidden relative">
+    <div className="min-h-screen bg-black py-24 px-6 overflow-hidden relative font-sans">
       <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-purple-900/20 via-black to-black opacity-70 pointer-events-none" />
 
       <div className="max-w-7xl mx-auto text-center mb-20 relative z-10">
-        <span className="text-purple-500 font-black tracking-[0.4em] text-[10px] uppercase">Abonnements Privilèges</span>
-        <h2 className="text-5xl md:text-7xl font-black text-white tracking-tighter mt-4 uppercase">
+        <span className="text-purple-500 font-black tracking-[0.4em] text-[10px] uppercase italic">Expérience Exclusive</span>
+        <h2 className="text-5xl md:text-7xl font-black text-white tracking-tighter mt-4 uppercase italic">
           REJOIGNEZ LE <span className="text-purple-600 italic">CLUB GYO</span>
         </h2>
         <p className="text-gray-400 mt-6 max-w-2xl mx-auto font-medium leading-relaxed uppercase text-[10px] tracking-widest">
-          Choisissez un forfait mensuel et profitez de soins exclusifs en toute liberté. Sans engagement.
+          Une immersion totale dans le bien-être avec nos forfaits mensuels sans engagement.
         </p>
       </div>
 
@@ -90,34 +89,55 @@ const Subscriptions = () => {
         {plans.map((plan, index) => (
           <div key={index} className="relative group transition-all duration-500 hover:translate-y-[-10px]">
             <div className={`relative h-full p-10 rounded-[3rem] backdrop-blur-xl flex flex-col z-10 border transition-all duration-500 ${
-              plan.name.includes("Luxe") // On peut baser le style populaire sur le nom
+              plan.name.toLowerCase().includes("luxe") 
               ? 'bg-purple-600/10 border-purple-500 shadow-[0_0_40px_rgba(147,51,234,0.1)]' 
               : 'bg-white/5 border-white/10'
             }`}>
               
-              {plan.name.includes("Luxe") && (
+              {plan.name.toLowerCase().includes("luxe") && (
                 <span className="absolute -top-4 left-1/2 -translate-x-1/2 bg-purple-600 text-white text-[10px] font-black uppercase tracking-widest py-2 px-6 rounded-full">
-                  Recommandé
+                  Le plus prisé
                 </span>
               )}
 
-              <h3 className="text-2xl font-black text-white mb-2 uppercase tracking-tighter">{plan.name}</h3>
+              <h3 className="text-2xl font-black text-white mb-2 uppercase tracking-tighter italic">{plan.name}</h3>
               <div className="flex items-baseline mb-6">
                 <span className="text-4xl font-black text-white tracking-tighter">
                     {new Intl.NumberFormat('fr-FR').format(plan.amount)}
                 </span>
-                <span className="text-purple-500 ml-2 font-black uppercase text-xs tracking-widest">CFA / mois</span>
+                <span className="text-purple-500 ml-2 font-black uppercase text-[10px] tracking-widest">CFA / mois</span>
               </div>
               
-              <p className="text-gray-400 text-[11px] mb-8 font-bold uppercase tracking-wide leading-relaxed h-12">
-                {plan.category} — {plan.duration} Séances Incluses
-              </p>
+              <div className="flex items-center gap-2 mb-8">
+                <div className="h-[1px] flex-1 bg-white/10"></div>
+                <p className="text-zinc-500 text-[9px] font-black uppercase tracking-widest">
+                    {plan.duration} {plan.duration > 1 ? 'Séances' : 'Séance'} / mois
+                </p>
+                <div className="h-[1px] flex-1 bg-white/10"></div>
+              </div>
+
+              <ul className="space-y-4 mb-12 flex-1">
+                <li className="flex items-center text-[10px] text-zinc-300 font-bold uppercase tracking-widest gap-3">
+                    <div className="w-1.5 h-1.5 bg-purple-600 rounded-full" />
+                    Accès Privilège Spa
+                </li>
+                <li className="flex items-center text-[10px] text-zinc-300 font-bold uppercase tracking-widest gap-3">
+                    <div className="w-1.5 h-1.5 bg-purple-600 rounded-full" />
+                    Tisane Détox Offerte
+                </li>
+                {plan.amount >= 65000 && (
+                    <li className="flex items-center text-[10px] text-zinc-300 font-bold uppercase tracking-widest gap-3">
+                        <div className="w-1.5 h-1.5 bg-purple-600 rounded-full" />
+                        Accès prioritaire
+                    </li>
+                )}
+              </ul>
 
               <button 
                 onClick={() => handleSelectPlan(plan)}
                 disabled={loadingPlan !== null}
                 className={`w-full py-5 rounded-full font-black uppercase tracking-widest text-[10px] transition-all duration-500 flex items-center justify-center gap-2 ${
-                  plan.name.includes("Luxe")
+                  plan.name.toLowerCase().includes("luxe")
                   ? 'bg-purple-600 text-white hover:bg-white hover:text-black' 
                   : 'bg-white text-black hover:bg-purple-600 hover:text-white'
                 } ${loadingPlan === plan.name ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -127,7 +147,7 @@ const Subscriptions = () => {
                       <div className="w-3 h-3 border-2 border-t-transparent border-white rounded-full animate-spin" />
                       Sécurisation...
                     </div>
-                ) : "Devenir Membre"}
+                ) : "Choisir ce forfait"}
               </button>
             </div>
           </div>

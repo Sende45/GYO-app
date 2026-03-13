@@ -17,6 +17,7 @@
     "@emailjs/browser": "^4.4.1",
     "@stripe/stripe-js": "^8.9.0",
     "@tailwindcss/vite": "^4.1.18",
+    "axios": "^1.13.6",
     "firebase": "^12.7.0",
     "framer-motion": "^12.24.7",
     "lucide-react": "^0.562.0",
