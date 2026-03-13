@@ -1,7 +1,10 @@
+// 1. Charger les variables d'environnement (Même si déjà fait dans server.js, c'est une sécurité)
+require('dotenv').config(); 
+
 const express = require('express');
 const cors = require('cors');
-const admin = require('firebase-admin');
 const path = require('path');
+const admin = require('firebase-admin'); // <== CET IMPORT MANQUAIT !
 
 // --- IMPORTATION DES ROUTES ---
 const bookingRoutes = require('./routes/bookingRoutes');
@@ -11,68 +14,57 @@ const userRoutes = require('./routes/userRoutes');
 
 const app = express();
 
-// --- INITIALISATION FIREBASE ADMIN (POUR LE MIDDLEWARE AUTH) ---
+// --- INITIALISATION FIREBASE ADMIN ---
 if (!admin.apps.length) {
     try {
         let serviceAccount;
         if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+            // Sur Render, on parse la variable d'env
             serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
         } else {
-            // Pour le dev local
-            serviceAccount = require('./serviceAccount.json');
+            // En local, on cherche le fichier
+            const serviceAccountPath = path.join(__dirname, 'serviceAccount.json');
+            serviceAccount = require(serviceAccountPath);
         }
         
         admin.initializeApp({
             credential: admin.credential.cert(serviceAccount)
         });
-        console.log("✅ Firebase Admin initialisé dans App.js");
+        console.log("✅ Firebase Admin initialisé");
     } catch (error) {
-        console.error("❌ Erreur initialisation Firebase Admin:", error.message);
+        console.error("❌ Erreur Firebase Admin:", error.message);
+        // On ne crash pas le serveur, mais les routes protégées risquent de faillir
     }
 }
 
 // --- MIDDLEWARES ---
 
-/**
- * STRIPE WEBHOOK : 
- * Doit impérativement être placé AVANT express.json() 
- * car il nécessite le corps de la requête au format "raw" pour vérifier la signature.
- */
+// WEBHOOK STRIPE (Doit être en RAW et AVANT express.json)
 app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
 
-// Middleware pour parser le JSON pour toutes les autres routes
 app.use(express.json());
 
-// Configuration CORS (Autorise ton Vercel et le localhost)
 app.use(cors({
-    origin: ['https://gyo-app.vercel.app', 'http://localhost:3000'],
+    origin: ['https://gyo-app.vercel.app', 'http://localhost:3000', 'http://localhost:5173'],
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true
 }));
 
-// --- DÉCLARATION DES POINTS D'ENTRÉE (API ROUTES) ---
-
-// Gestion des réservations (Bookings)
+// --- ROUTES ---
 app.use('/api/bookings', bookingRoutes);
-
-// Gestion des tarifs et services (Prices)
 app.use('/api/prices', priceRoutes);
-
-// Gestion des paiements et webhooks (Stripe)
 app.use('/api/payments', paymentRoutes);
-
-// Gestion des profils membres (Users)
 app.use('/api/users', userRoutes);
 
-// --- GESTION DES ERREURS 404 ---
+// --- ERREUR 404 ---
 app.use((req, res) => {
     res.status(404).json({ message: "Route non trouvée sur le serveur GYO" });
 });
 
 // --- GESTIONNAIRE D'ERREURS GLOBAL ---
 app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).json({ error: "Erreur interne du serveur" });
+    console.error("🚨 Erreur Serveur:", err.stack);
+    res.status(500).json({ error: "Erreur interne du serveur GYO" });
 });
 
 module.exports = app;
