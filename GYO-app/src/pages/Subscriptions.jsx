@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../firebase'; 
-import api from '../api/axios'; // Import de ton instance configurée
+import api from '../api/axios'; 
+// Si tu utilises Zustand ici pour stocker le plan choisi globalement :
+import { create } from 'zustand'; 
 
 const Subscriptions = () => {
   const [plans, setPlans] = useState([]);
@@ -9,10 +11,11 @@ const Subscriptions = () => {
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const navigate = useNavigate();
 
+  // --- RÉCUPÉRATION DES PLANS ---
   useEffect(() => {
     const fetchPlans = async () => {
       try {
-        // L'URL devient automatiquement : baseURL + '/prices'
+        // L'instance Axios s'occupe du baseURL + /api
         const response = await api.get('/prices');
         const subs = response.data.filter(p => p.category === 'Abonnement');
         setPlans(subs);
@@ -25,6 +28,7 @@ const Subscriptions = () => {
     fetchPlans();
   }, []);
 
+  // --- GESTION DU PAIEMENT ---
   const handleSelectPlan = async (plan) => {
     const currentUser = auth.currentUser;
 
@@ -37,7 +41,7 @@ const Subscriptions = () => {
     setLoadingPlan(plan.name);
 
     try {
-      // Utilisation de l'instance pour le POST
+      // Route exacte : /api/payments/create-checkout-session
       const response = await api.post('/payments/create-checkout-session', {
         priceId: plan.stripePriceId, 
         userId: currentUser.uid,
@@ -49,6 +53,7 @@ const Subscriptions = () => {
       });
 
       if (response.data.url) {
+        // Redirection vers Stripe
         window.location.href = response.data.url;
       } else {
         throw new Error("URL de paiement manquante.");
@@ -61,7 +66,6 @@ const Subscriptions = () => {
     }
   };
 
-  // ... (Le reste du JSX reste identique, c'est juste la logique API qui est purifiée)
   if (isInitialLoading) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center space-y-4">
