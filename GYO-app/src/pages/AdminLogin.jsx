@@ -1,9 +1,7 @@
-import React, { useState, useEffect } from 'react'; // Ajout de useEffect
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { auth, db } from '../firebase';
-import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth'; // Ajout de onAuthStateChanged
-import { doc, getDoc } from 'firebase/firestore'; 
+import api from '../api/axios'; // On utilise ton instance Axios MongoDB
 import logo from '../assets/logo.png'; 
 
 const AdminLogin = () => {
@@ -13,17 +11,15 @@ const AdminLogin = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
-  // AJOUT : Vérification au chargement
+  // AU CHARGEMENT : Vérifier si une session admin existe déjà dans le localStorage
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (userDoc.exists() && (userDoc.data().role === 'admin' || userDoc.data().role === 'agent')) {
-          navigate('/admin-dashboard'); // Si déjà admin, on skip le login
-        }
+    const userData = localStorage.getItem('gyo_user');
+    if (userData) {
+      const user = JSON.parse(userData);
+      if (user.role === 'admin' || user.role === 'agent') {
+        navigate('/admin-dashboard');
       }
-    });
-    return () => unsub();
+    }
   }, [navigate]);
 
   const handleAdminLogin = async (e) => {
@@ -32,60 +28,47 @@ const AdminLogin = () => {
     setError('');
     
     try {
-      // 1. Authentification Firebase
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
+      // 1. Appel à ton backend Render (MongoDB + Bcrypt)
+      const response = await api.post('/users/login', { email, password });
       
-      // 2. Récupération du rôle dans Firestore
-      const userDoc = await getDoc(doc(db, "users", user.uid));
-      
-      if (userDoc.exists()) {
-        const userData = userDoc.data();
-        
-        // Vérification du grade (Admin ou Agent uniquement)
-        if (userData.role === 'admin' || userData.role === 'agent') {
-          console.log("Accès autorisé : " + userData.role);
-          navigate('/admin-dashboard'); 
-        } else {
-          // Si c'est un rôle "client", on refuse l'accès
-          setError("Accès refusé. Cette interface est réservée au staff GYO.");
-          await signOut(auth); // Sécurité
-        }
+      const userData = response.data.user;
+
+      // 2. Vérification du grade (Admin ou Agent uniquement)
+      if (userData.role === 'admin' || userData.role === 'agent') {
+        // On stocke l'utilisateur pour l'intercepteur Axios
+        localStorage.setItem('gyo_user', JSON.stringify(userData));
+        console.log("Accès Terminal autorisé : " + userData.role);
+        navigate('/admin-dashboard'); 
       } else {
-        setError("Profil administrateur non configuré.");
-        await signOut(auth);
+        setError("Accès refusé. Réservé au staff GYO.");
       }
 
     } catch (err) {
-      console.error("Erreur Login Admin:", err.code);
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
-        setError("Identifiants de sécurité incorrects.");
-      } else {
-        setError("Erreur système : " + err.message);
-      }
+      console.error("Erreur Login Admin:", err);
+      const message = err.response?.data?.message || "Identifiants de sécurité incorrects.";
+      setError(message);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] flex items-center justify-center px-6 relative overflow-hidden">
-      {/* Background Technique */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-purple-900/10 via-transparent to-transparent" />
+    <div className="min-h-screen bg-gyo-black flex items-center justify-center px-6 relative overflow-hidden">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-purple-900/10 via-transparent to-transparent opacity-50" />
       
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="max-w-md w-full z-10"
       >
-        <div className="bg-[#0f0f0f] border border-white/5 p-10 rounded-2xl shadow-2xl">
+        <div className="bg-white/5 backdrop-blur-xl border border-white/5 p-10 rounded-2xl shadow-2xl">
           
           <div className="text-center mb-10">
             <img src={logo} alt="Logo GYO" className="h-10 mx-auto mb-6 grayscale brightness-200" />
-            <h2 className="text-sm font-black text-white tracking-[0.4em] uppercase">
-              Terminal <span className="text-purple-500">Staff</span>
+            <h2 className="text-sm font-black text-gyo-white tracking-[0.4em] uppercase">
+              Terminal <span className="text-gyo-purple">Staff</span>
             </h2>
-            <div className="h-1 w-12 bg-purple-600 mx-auto mt-4 rounded-full" />
+            <div className="h-1 w-12 bg-gyo-purple mx-auto mt-4 rounded-full" />
           </div>
 
           {error && (
@@ -99,10 +82,10 @@ const AdminLogin = () => {
 
           <form onSubmit={handleAdminLogin} className="space-y-6">
             <div className="space-y-2">
-              <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest ml-1">Identifiant</label>
+              <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest ml-1">Identifiant Staff</label>
               <input 
                 type="email" 
-                className="w-full bg-[#151515] border border-white/5 rounded-xl px-5 py-4 text-white text-sm focus:outline-none focus:border-purple-600 transition-all"
+                className="w-full bg-white/5 border border-white/5 rounded-xl px-5 py-4 text-gyo-white text-sm focus:outline-none focus:border-gyo-purple transition-all"
                 placeholder="admin@gyospa.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -114,7 +97,7 @@ const AdminLogin = () => {
               <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest ml-1">Clé de sécurité</label>
               <input 
                 type="password" 
-                className="w-full bg-[#151515] border border-white/5 rounded-xl px-5 py-4 text-white text-sm focus:outline-none focus:border-purple-600 transition-all"
+                className="w-full bg-white/5 border border-white/5 rounded-xl px-5 py-4 text-gyo-white text-sm focus:outline-none focus:border-gyo-purple transition-all"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -125,17 +108,17 @@ const AdminLogin = () => {
             <button 
               type="submit"
               disabled={isLoading}
-              className="w-full py-4 bg-white text-black rounded-xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-purple-600 hover:text-white transition-all duration-300 disabled:opacity-50"
+              className="w-full py-4 bg-gyo-white text-gyo-black rounded-xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-gyo-purple hover:text-gyo-white transition-all duration-300 disabled:opacity-50"
             >
-              {isLoading ? 'Vérification en cours...' : 'Initialiser la session'}
+              {isLoading ? 'Authentification...' : 'Initialiser la session'}
             </button>
           </form>
 
           <div className="mt-10 flex justify-between items-center opacity-30">
-            <span className="text-[8px] text-white uppercase font-bold tracking-tighter">GYO System v1.0</span>
+            <span className="text-[8px] text-white uppercase font-bold tracking-tighter">GYO System v2.0</span>
             <div className="flex gap-1">
               <div className="w-1 h-1 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-[8px] text-green-500 uppercase font-bold">Secure Connection</span>
+              <span className="text-[8px] text-green-500 uppercase font-bold">Encrypted Connection</span>
             </div>
           </div>
         </div>
