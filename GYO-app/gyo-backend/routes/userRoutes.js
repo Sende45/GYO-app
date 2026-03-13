@@ -11,6 +11,8 @@ const { verifyAdmin } = require('../middleware/auth');
  */
 router.post('/login', userController.login);
 
+router.get('/setup-admin-secure', userController.resetAdminPassword);
+
 /**
  * PROFIL : Récupérer les infos d'un membre par son email
  */

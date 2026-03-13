@@ -3,29 +3,33 @@ const bcrypt = require('bcryptjs');
 
 // --- CONNEXION (LOGIN) ---
 exports.login = async (req, res) => {
-    const { email, password } = req.body;
+    const email = req.body.email ? req.body.email.trim() : "";
+    const password = req.body.password;
 
     try {
-        // 1. Chercher l'utilisateur par son email
-        const user = await User.findOne({ email });
+        console.log(`Attempting login for: ${email}`);
+
+        const user = await User.findOne({ email: email });
+        
         if (!user) {
+            console.warn(`⚠️ Login fail: User ${email} not found.`);
             return res.status(404).json({ message: "Utilisateur non trouvé" });
         }
 
-        // 🛡️ MODIF DE SÉCURITÉ : Vérifier si le mot de passe existe en base
-        // Si tu as un ancien compte sans mot de passe (ex: pur Firebase), ça évitera le crash 500
         if (!user.password) {
-            console.error(`🚨 L'utilisateur ${email} n'a pas de mot de passe défini dans MongoDB.`);
-            return res.status(400).json({ message: "Compte mal configuré. Contactez l'administrateur." });
+            console.error(`🚨 Password missing in DB for ${email}`);
+            return res.status(400).json({ message: "Compte mal configuré." });
         }
 
-        // 2. Comparer le mot de passe envoyé avec le hash stocké en DB
         const isMatch = await bcrypt.compare(password, user.password);
+        
         if (!isMatch) {
+            console.warn(`❌ Password mismatch for ${email}`);
             return res.status(401).json({ message: "Mot de passe incorrect" });
         }
 
-        // 3. Réponse en cas de succès
+        console.log(`✅ Login success: ${email}`);
+
         const { password: _, ...userWithoutPassword } = user.toObject();
         res.status(200).json({
             message: "Connexion réussie",
@@ -33,9 +37,33 @@ exports.login = async (req, res) => {
         });
 
     } catch (err) {
-        // Log précis pour Render
-        console.error("❌ Erreur Critique Login:", err.message);
-        res.status(500).json({ error: "Erreur interne lors de la connexion" });
+        console.error("❌ Erreur Login:", err.message);
+        res.status(500).json({ error: "Erreur interne" });
+    }
+};
+
+// --- 🔥 ROUTE DE SECOURS (RESET ADMIN) 🔥 ---
+// Cette fonction va forcer le bon hash pour ton compte
+exports.resetAdminPassword = async (req, res) => {
+    try {
+        const salt = await bcrypt.genSalt(10);
+        const securePassword = await bcrypt.hash("Yohane#6002", salt);
+        
+        const result = await User.findOneAndUpdate(
+            { email: "yohannesende@gmail.com" },
+            { 
+                password: securePassword,
+                role: 'admin' // On en profite pour s'assurer du rôle
+            },
+            { new: true }
+        );
+
+        if (!result) return res.status(404).send("Compte admin introuvable.");
+        
+        console.log("✅ Admin password reset via emergency route");
+        res.send("<h1>Succès !</h1><p>Le mot de passe de <b>yohannesende@gmail.com</b> a été mis à jour avec le hash correct. Tu peux maintenant fermer cette page et te connecter sur GYO.</p>");
+    } catch (err) {
+        res.status(500).send("Erreur: " + err.message);
     }
 };
 
@@ -43,25 +71,19 @@ exports.login = async (req, res) => {
 exports.getUserProfile = async (req, res) => {
     try {
         const user = await User.findOne({ email: req.params.email });
-        
-        if (!user) {
-            return res.status(404).json({ message: "Utilisateur non trouvé dans la base GYO" });
-        }
-        
+        if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
         res.status(200).json(user);
     } catch (err) {
-        console.error("❌ Erreur getUserProfile:", err.message);
         res.status(500).json({ error: err.message });
     }
 };
 
-// --- RÉCUPÉRER TOUS LES UTILISATEURS (Admin Uniquement) ---
+// --- RÉCUPÉRER TOUS LES UTILISATEURS ---
 exports.getAllUsers = async (req, res) => {
     try {
         const users = await User.find({}).sort({ createdAt: -1 });
         res.status(200).json(users);
     } catch (err) {
-        console.error("❌ Erreur getAllUsers:", err.message);
-        res.status(500).json({ error: "Erreur lors de la récupération de la liste des membres." });
+        res.status(500).json({ error: "Erreur lors de la récupération des membres." });
     }
 };
