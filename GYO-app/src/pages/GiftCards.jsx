@@ -1,131 +1,120 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { db, auth } from '../firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import emailjs from '@emailjs/browser'; // Import EmailJS
+import { auth } from '../firebase'; 
+import axios from 'axios';
 
 const GiftCards = () => {
-  const [amount, setAmount] = useState(50);
+  const [amount, setAmount] = useState(30000); // Montant par défaut en FCFA
   const [recipient, setRecipient] = useState('');
-  const [isGenerated, setIsGenerated] = useState(false);
-  const [generatedCode, setGeneratedCode] = useState('');
-  const [isSending, setIsSending] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  // Fonction pour envoyer l'email via EmailJS
-  const sendEmail = (code, recipientName, amountValue) => {
-    const templateParams = {
-      to_email: auth.currentUser?.email, // Envoi à l'acheteur
-      recipient_name: recipientName,
-      gift_code: code,
-      amount: amountValue,
-    };
-
-    // REMPLACE CES 3 VALEURS PAR TES IDS EMAILJS
-    emailjs.send(
-      'YOUR_SERVICE_ID', 
-      'YOUR_TEMPLATE_ID', 
-      templateParams, 
-      'YOUR_PUBLIC_KEY'
-    )
-    .then((response) => {
-      console.log('Email envoyé avec succès !', response.status, response.text);
-    })
-    .catch((err) => {
-      console.error('Erreur EmailJS:', err);
-    });
-  };
-
-  const generateGiftCode = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let code = 'GYO-';
-    for (let i = 0; i < 6; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return code;
-  };
+  // Configuration des montants prédéfinis (Plus adaptés au SPA à Abidjan)
+  const quickAmounts = [30000, 50000, 100000];
 
   const handlePurchase = async () => {
     if (!recipient) return alert("Veuillez saisir le nom du bénéficiaire");
-    
-    setIsSending(true);
-    const newCode = generateGiftCode();
-    
+    const currentUser = auth.currentUser;
+
+    if (!currentUser) {
+      alert("Veuillez vous connecter pour offrir une carte cadeau.");
+      return;
+    }
+
+    setIsProcessing(true);
+
     try {
-      // 1. Enregistrement dans Firestore
-      await addDoc(collection(db, "gift_cards"), {
-        code: newCode,
-        amount: amount,
-        recipient: recipient,
-        senderEmail: auth.currentUser?.email || 'Anonyme',
-        isUsed: false,
-        createdAt: serverTimestamp()
+      // 1. Appel à ton backend pour créer une session Stripe spéciale GiftCard
+      const response = await axios.post('https://gyo-backend.onrender.com/api/payments/create-checkout-session', {
+        userId: currentUser.uid,
+        email: currentUser.email,
+        planName: `Carte Cadeau pour ${recipient}`,
+        amount: amount, // Le montant choisi
+        category: 'GiftCard', // Crucial pour la logique Webhook
+        isSubscription: false // Paiement unique
       });
 
-      // 2. Envoi du mail de confirmation
-      sendEmail(newCode, recipient, amount);
-
-      setGeneratedCode(newCode);
-      setIsGenerated(true);
+      // 2. Redirection vers le paiement Stripe
+      if (response.data.url) {
+        window.location.href = response.data.url;
+      } else {
+        throw new Error("Impossible de joindre le service de paiement.");
+      }
     } catch (error) {
-      console.error("Erreur lors de la création de la carte:", error);
+      console.error("Erreur achat carte cadeau:", error);
+      alert("Une erreur est survenue lors de l'initialisation du paiement.");
     } finally {
-      setIsSending(false);
+      setIsProcessing(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-white pt-32 pb-20 px-6">
+    <div className="min-h-screen bg-white pt-32 pb-20 px-6 overflow-hidden">
       <div className="max-w-4xl mx-auto text-center">
         <motion.span 
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-          className="text-purple-600 font-black tracking-[0.3em] text-[10px] uppercase italic"
+          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+          className="text-purple-600 font-black tracking-[0.4em] text-[10px] uppercase italic"
         >
-          Offrez l'exceptionnel
+          L'Élégance en Partage
         </motion.span>
-        <h1 className="text-5xl font-black text-black tracking-tighter mt-4 mb-16 uppercase italic">
-          Cartes <span className="text-gray-300">Cadeaux</span>
+        <h1 className="text-5xl md:text-7xl font-black text-black tracking-tighter mt-4 mb-20 uppercase italic">
+          Cartes <span className="text-gray-200">Privilèges</span>
         </h1>
 
-        {!isGenerated ? (
-          <div className="grid md:grid-cols-2 gap-12 items-center">
-            {/* Visualisation de la carte */}
-            <motion.div 
-              whileHover={{ rotateY: 10, rotateX: 10 }}
-              className="bg-black aspect-[1.6/1] rounded-[2.5rem] p-10 text-left relative overflow-hidden shadow-2xl shadow-purple-500/20"
-            >
-              <div className="absolute top-0 right-0 w-40 h-40 bg-purple-600/30 blur-[80px]"></div>
+        <div className="grid md:grid-cols-2 gap-16 items-start">
+          {/* Visualisation Dynamique de la Carte */}
+          <motion.div 
+            initial={{ x: -50, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            whileHover={{ rotateY: -5, rotateX: 5, scale: 1.02 }}
+            className="bg-[#0a0a0a] aspect-[1.6/1] rounded-[2.5rem] p-12 text-left relative overflow-hidden shadow-[0_30px_60px_rgba(0,0,0,0.15)] group"
+          >
+            {/* Effet de brillance holographique */}
+            <div className="absolute inset-0 bg-gradient-to-tr from-purple-600/10 via-transparent to-white/5 opacity-50"></div>
+            
+            <div className="flex justify-between items-start relative z-10">
               <h2 className="text-white font-black italic text-2xl tracking-tighter">GYO SPA</h2>
-              <div className="mt-12">
-                <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest">Valeur du soin</p>
-                <p className="text-5xl font-black text-white mt-2">{amount}€</p>
-              </div>
-              <p className="absolute bottom-10 left-10 text-gray-500 text-[9px] font-bold uppercase tracking-[0.3em]">Code Privilège Unique</p>
-            </motion.div>
+              <div className="w-12 h-8 bg-gradient-to-br from-yellow-400/20 to-yellow-600/40 rounded-md border border-yellow-500/20 shadow-inner" />
+            </div>
 
-            {/* Formulaire */}
-            <div className="text-left space-y-8">
-              <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-4">Sélectionner un montant</label>
-                <div className="flex gap-4">
-                  {[50, 100, 150].map((val) => (
-                    <button 
-                      key={val}
-                      onClick={() => setAmount(val)}
-                      className={`flex-1 py-4 rounded-2xl font-black transition-all ${amount === val ? 'bg-purple-600 text-white shadow-lg' : 'bg-gray-50 text-gray-400'}`}
-                    >
-                      {val}€
-                    </button>
-                  ))}
-                </div>
-              </div>
+            <div className="mt-16 relative z-10">
+              <p className="text-gray-500 text-[9px] font-black uppercase tracking-[0.3em] mb-1">Valeur du Soin</p>
+              <p className="text-5xl font-black text-white tracking-tighter">
+                {new Intl.NumberFormat('fr-FR').format(amount)} <span className="text-xs text-purple-600">FCFA</span>
+              </p>
+            </div>
 
+            <div className="absolute bottom-12 left-12 z-10">
+                <p className="text-gray-500 text-[8px] font-bold uppercase tracking-[0.4em]">
+                    Bénéficiaire : <span className="text-white ml-2">{recipient || "••••••••••••"}</span>
+                </p>
+            </div>
+          </motion.div>
+
+          {/* Formulaire Elite */}
+          <div className="text-left space-y-10 py-4">
+            <div>
+              <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-6">Montant du cadeau</label>
+              <div className="grid grid-cols-3 gap-3">
+                {quickAmounts.map((val) => (
+                  <button 
+                    key={val}
+                    onClick={() => setAmount(val)}
+                    className={`py-5 rounded-2xl font-black text-xs transition-all duration-500 ${amount === val ? 'bg-purple-600 text-white shadow-xl shadow-purple-600/20 scale-105' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}
+                  >
+                    {val / 1000}K
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-6">
               <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-4">Nom du bénéficiaire</label>
+                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-4">Pour qui ?</label>
                 <input 
                   type="text"
-                  placeholder="Ex: Sarah Martin"
-                  className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 outline-none focus:ring-2 ring-purple-600/20"
+                  placeholder="Nom complet du bénéficiaire"
+                  className="w-full bg-gray-50 border-2 border-transparent rounded-2xl px-8 py-5 text-sm font-bold outline-none focus:border-purple-600/20 focus:bg-white transition-all"
                   value={recipient}
                   onChange={(e) => setRecipient(e.target.value)}
                 />
@@ -133,35 +122,22 @@ const GiftCards = () => {
 
               <button 
                 onClick={handlePurchase}
-                disabled={isSending}
-                className={`w-full py-5 rounded-full font-black uppercase tracking-widest text-[10px] transition-all duration-500 shadow-xl ${isSending ? 'bg-gray-400' : 'bg-black text-white hover:bg-purple-600'}`}
+                disabled={isProcessing}
+                className={`w-full py-6 rounded-full font-black uppercase tracking-[0.3em] text-[11px] transition-all duration-700 shadow-2xl ${
+                  isProcessing 
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                  : 'bg-black text-white hover:bg-purple-600 hover:shadow-purple-600/40'
+                }`}
               >
-                {isSending ? 'Génération...' : 'Générer la carte cadeau'}
+                {isProcessing ? 'Sécurisation...' : 'Offrir maintenant'}
               </button>
             </div>
+
+            <p className="text-[9px] text-gray-400 font-medium leading-relaxed text-center uppercase tracking-widest">
+              * La carte cadeau sera envoyée par email après confirmation du paiement. <br /> Valable 12 mois dans notre établissement d'Abidjan.
+            </p>
           </div>
-        ) : (
-          <motion.div 
-            initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-            className="bg-gray-50 rounded-[3rem] p-12 border border-gray-100"
-          >
-            <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-8">
-              <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
-            </div>
-            <h2 className="text-3xl font-black uppercase tracking-tighter">Félicitations !</h2>
-            <p className="text-gray-500 mt-2 font-medium italic mb-10">Un email de confirmation a été envoyé à {auth.currentUser?.email}.</p>
-            
-            <div className="bg-white border-2 border-dashed border-purple-200 p-8 rounded-3xl inline-block">
-              <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-2">Code pour {recipient} :</p>
-              <p className="text-4xl font-black text-purple-600 tracking-[0.2em]">{generatedCode}</p>
-            </div>
-            
-            <div className="mt-12 flex flex-col gap-4 max-w-xs mx-auto">
-              <button className="text-[10px] font-black uppercase tracking-widest text-gray-400 underline hover:text-black transition-colors" onClick={() => {setIsGenerated(false); setRecipient('');}}>Offrir une autre carte</button>
-              <Link to="/mon-compte" className="bg-black text-white py-4 rounded-full font-black uppercase text-[10px] tracking-widest text-center">Retour à mon espace</Link>
-            </div>
-          </motion.div>
-        )}
+        </div>
       </div>
     </div>
   );

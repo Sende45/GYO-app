@@ -1,125 +1,44 @@
-// 1. TOUJOURS CHARGER DOTENV EN PREMIER
-require('dotenv').config(); 
-
-const express = require('express');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const admin = require('firebase-admin');
-const cors = require('cors');
-const path = require('path');
-
-const app = express();
-
-// Vérification console pour Stripe
-console.log("Clé Stripe chargée :", process.env.STRIPE_SECRET_KEY ? "OUI ✅" : "NON ❌");
-
-// --- CONFIGURATION FIREBASE (MODIFIÉE POUR RENDER) ---
-try {
-    let serviceAccount;
-
-    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-        console.log("Mode : Chargement Firebase via Variable d'environnement (Render) ☁️");
-        serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-    } else {
-        console.log("Mode : Chargement Firebase via fichier local (PC) 💻");
-        const serviceAccountPath = path.join(__dirname, "serviceAccount.json");
-        serviceAccount = require(serviceAccountPath);
-    }
-
-    if (!admin.apps.length) {
-        admin.initializeApp({
-            credential: admin.credential.cert(serviceAccount)
-        });
-    }
-    console.log("Firebase Admin initialisé : OUI ✅");
-} catch (error) {
-    console.error("❌ ERREUR FIREBASE :", error.message);
-    if (!process.env.FIREBASE_SERVICE_ACCOUNT && !path.join(__dirname, "serviceAccount.json")) {
-        process.exit(1);
-    }
-}
-
-const db = admin.firestore();
-
-// --- CONFIGURATION CORS (AUTORISE TON VERCEL) ---
-app.use(cors({
-    origin: ['https://gyo-app.vercel.app', 'http://localhost:3000'],
-    methods: ['GET', 'POST'],
-    credentials: true
-}));
-
-// Route 1 : Créer la session de paiement
-app.post('/create-checkout-session', express.json(), async (req, res) => {
-    const { priceId, userId, email, planName, sessionsCount } = req.body;
-
-    try {
-        const session = await stripe.checkout.sessions.create({
-            payment_method_types: ['card'],
-            line_items: [{ price: priceId, quantity: 1 }],
-            mode: 'subscription',
-            // MISES À JOUR DES URLS :
-            success_url: 'https://gyo-app.vercel.app/success', 
-            cancel_url: 'https://gyo-app.vercel.app/subscriptions',
-            customer_email: email,
-            metadata: { 
-                userId: userId, 
-                sessionsCount: sessionsCount ? sessionsCount.toString() : "0", 
-                planName: planName 
-            }
-        });
-
-        // MODIFICATION : On renvoie TOUTE la session (incluant l'URL pour le frontend)
-        res.json(session); 
-        
-    } catch (error) {
-        console.error("Erreur Session:", error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Route 2 : Le Webhook
-app.post('/webhook', express.raw({type: 'application/json'}), async (req, res) => {
-    const sig = req.headers['stripe-signature'];
-    let event;
-
-    try {
-        event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-    } catch (err) {
-        console.error("Erreur Webhook Signature:", err.message);
-        return res.status(400).send(`Webhook Error: ${err.message}`);
-    }
-
-    if (event.type === 'checkout.session.completed') {
-        const session = event.data.object;
-        const { userId, sessionsCount, planName } = session.metadata;
-
-        console.log(`💰 Paiement réussi pour l'utilisateur : ${userId}`);
-
-        const expiryDate = new Date();
-        expiryDate.setDate(expiryDate.getDate() + 30);
-
-        try {
-            const userRef = db.collection("users").doc(userId);
-            const userDoc = await userRef.get();
-            
-            const currentSessions = userDoc.exists ? (userDoc.data()?.subscription?.remainingSessions || 0) : 0;
-
-            await userRef.set({
-                subscription: {
-                    planName: planName,
-                    status: "active",
-                    expiryDate: admin.firestore.Timestamp.fromDate(expiryDate),
-                    remainingSessions: currentSessions + parseInt(sessionsCount),
-                },
-                lastPurchaseDate: admin.firestore.FieldValue.serverTimestamp()
-            }, { merge: true });
-
-            console.log("✅ Firestore mis à jour avec succès !");
-        } catch (dbError) {
-            console.error("❌ Erreur Firestore:", dbError);
-        }
-    }
-    res.json({received: true});
-});
+require('dotenv').config();
+const mongoose = require('mongoose');
+const app = require('./app');
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 Serveur GYO actif sur le port ${PORT}`));
+
+// Configuration des options de connexion (évite les warnings Mongoose)
+const connectionOptions = {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+};
+
+// --- CONNEXION MONGODB ATLAS ---
+mongoose.connect(process.env.MONGO_URI, connectionOptions)
+    .then(() => {
+        console.log("-----------------------------------------");
+        console.log("✅ CORE ENGINE : MongoDB Connecté (GYO)");
+        
+        const server = app.listen(PORT, () => {
+            console.log(`🚀 SERVEUR ACTIF SUR LE PORT : ${PORT}`);
+            console.log("-----------------------------------------");
+        });
+
+        // GESTION DU SHUTDOWN PROPRE (Pour Render)
+        process.on('SIGTERM', () => {
+            console.log('SIGTERM reçu. Fermeture du serveur GYO...');
+            server.close(() => {
+                mongoose.connection.close(false, () => {
+                    console.log('MongoDB déconnecté. Fin du processus.');
+                    process.exit(0);
+                });
+            });
+        });
+    })
+    .catch((err) => {
+        console.error("❌ ERREUR CRITIQUE DE CONNEXION :");
+        console.error(err.message);
+        process.exit(1);
+    });
+
+// Gestion des erreurs de base de données après connexion
+mongoose.connection.on('error', err => {
+    console.error('⚠️ MongoDB Error en cours de route:', err);
+});

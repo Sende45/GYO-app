@@ -1,54 +1,36 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../firebase'; 
-import { loadStripe } from '@stripe/stripe-js';
-
-// Clé publique Stripe
-const stripePromise = loadStripe('pk_test_51T17ReIImwaKuwtjOtgouWGzsbeCpiIiWHL98WKatEkUTdrr2K10dQcLVCJ2YvB1iX0qqlV9xRnhTXHUigx52wvO00g9jmgu4J');
+import axios from 'axios'; // On passe sur axios pour plus de propreté
 
 const Subscriptions = () => {
+  const [plans, setPlans] = useState([]);
   const [loadingPlan, setLoadingPlan] = useState(null);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const navigate = useNavigate();
 
-  // IDs de prix Stripe (price_...)
-  const plans = [
-    {
-      id: "price_1T6vkGIImwaKuwtjMWb9PUKj",
-      name: "Sérénité Solo",
-      price: "35000",
-      displayPrice: "35.000",
-      description: "L'essentiel du bien-être pour une pause mensuelle.",
-      features: ["1 Soin Signature / mois", "Accès Hammam 1h", "Tisane détox offerte"],
-      isPopular: false,
-      sessions: 1
-    },
-    {
-      id: "price_1T6vmLIImwaKuwtjBavMj7bW", 
-      name: "Luxe Illimité",
-      price: "65000",
-      displayPrice: "65.000",
-      description: "Le choix favori de nos membres réguliers.",
-      features: ["2 Soins au choix / mois", "Accès Spa illimité", "Remise de 15% sur les produits", "Accès prioritaire"],
-      isPopular: true,
-      sessions: 2
-    },
-    {
-      id: "price_1T6vndIImwaKuwtjdI9KpdKG", 
-      name: "Privilège VIP",
-      price: "150000",
-      displayPrice: "150.000",
-      description: "L'expérience GYO ultime et personnalisée.",
-      features: ["Soins illimités", "Conciergerie dédiée", "Privatisation du Spa (1h/mois)", "Invitations aux soirées privées"],
-      isPopular: false,
-      sessions: 99
-    }
-  ];
+  // 1. CHARGEMENT DYNAMIQUE DEPUIS MONGODB
+  useEffect(() => {
+    const fetchPlans = async () => {
+      try {
+        const response = await axios.get('https://gyo-backend.onrender.com/api/prices');
+        // On filtre uniquement les abonnements configurés dans ta collection
+        const subs = response.data.filter(p => p.category === 'Abonnement');
+        setPlans(subs);
+      } catch (err) {
+        console.error("Erreur chargement plans:", err);
+      } finally {
+        setIsInitialLoading(false);
+      }
+    };
+    fetchPlans();
+  }, []);
 
   const handleSelectPlan = async (plan) => {
     const currentUser = auth.currentUser;
 
     if (!currentUser) {
-      alert("Veuillez vous connecter pour souscrire à un abonnement.");
+      alert("Veuillez vous connecter pour rejoindre le Club GYO.");
       navigate('/login');
       return;
     }
@@ -56,41 +38,39 @@ const Subscriptions = () => {
     setLoadingPlan(plan.name);
 
     try {
-      // 1. APPEL À TON SERVEUR RENDER
-      const response = await fetch('https://gyo-backend.onrender.com/create-checkout-session', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          priceId: plan.id,
-          userId: currentUser.uid,
-          email: currentUser.email,
-          planName: plan.name,
-          sessionsCount: plan.sessions,
-        }),
+      // 2. APPEL À TON SERVEUR RENDER (PaymentController)
+      // On envoie les infos nécessaires pour que MongoDB et Stripe s'accordent
+      const response = await axios.post('https://gyo-backend.onrender.com/api/payments/create-checkout-session', {
+        priceId: plan.stripePriceId, // Utilise le champ de ta collection MongoDB
+        userId: currentUser.uid,
+        email: currentUser.email,
+        planName: plan.name,
+        sessionsCount: plan.duration, // Dans ton modèle MongoDB, duration = nb de séances pour un pack
+        isSubscription: true,        // Force le mode 'subscription' sur Stripe
+        category: 'Abonnement'       // Pour que le Webhook sache quoi faire
       });
 
-      const session = await response.json();
-
-      if (session.error) {
-        throw new Error(session.error);
-      }
-
-      // 2. NOUVELLE MÉTHODE : Redirection directe via l'URL fournie par le serveur
-      // C'est la solution pour l'erreur "redirectToCheckout is no longer supported"
-      if (session.url) {
-        window.location.href = session.url;
+      // 3. REDIRECTION SÉCURISÉE
+      if (response.data.url) {
+        window.location.href = response.data.url;
       } else {
-        throw new Error("Impossible de générer l'URL de paiement.");
+        throw new Error("URL de paiement manquante.");
       }
 
     } catch (error) {
-      console.error("Erreur lors de l'initialisation du paiement :", error);
-      alert("Une erreur est survenue lors de la connexion au serveur de paiement.");
+      console.error("Erreur initialisation paiement :", error);
+      alert("Erreur de connexion au service de paiement GYO.");
       setLoadingPlan(null);
     }
   };
+
+  if (isInitialLoading) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-black py-24 px-6 overflow-hidden relative">
@@ -110,12 +90,12 @@ const Subscriptions = () => {
         {plans.map((plan, index) => (
           <div key={index} className="relative group transition-all duration-500 hover:translate-y-[-10px]">
             <div className={`relative h-full p-10 rounded-[3rem] backdrop-blur-xl flex flex-col z-10 border transition-all duration-500 ${
-              plan.isPopular 
+              plan.name.includes("Luxe") // On peut baser le style populaire sur le nom
               ? 'bg-purple-600/10 border-purple-500 shadow-[0_0_40px_rgba(147,51,234,0.1)]' 
               : 'bg-white/5 border-white/10'
             }`}>
               
-              {plan.isPopular && (
+              {plan.name.includes("Luxe") && (
                 <span className="absolute -top-4 left-1/2 -translate-x-1/2 bg-purple-600 text-white text-[10px] font-black uppercase tracking-widest py-2 px-6 rounded-full">
                   Recommandé
                 </span>
@@ -123,28 +103,21 @@ const Subscriptions = () => {
 
               <h3 className="text-2xl font-black text-white mb-2 uppercase tracking-tighter">{plan.name}</h3>
               <div className="flex items-baseline mb-6">
-                <span className="text-4xl font-black text-white tracking-tighter">{plan.displayPrice}</span>
+                <span className="text-4xl font-black text-white tracking-tighter">
+                    {new Intl.NumberFormat('fr-FR').format(plan.amount)}
+                </span>
                 <span className="text-purple-500 ml-2 font-black uppercase text-xs tracking-widest">CFA / mois</span>
               </div>
               
               <p className="text-gray-400 text-[11px] mb-8 font-bold uppercase tracking-wide leading-relaxed h-12">
-                {plan.description}
+                {plan.category} — {plan.duration} Séances Incluses
               </p>
-
-              <ul className="space-y-4 mb-12 flex-1">
-                {plan.features.map((feature, i) => (
-                  <li key={i} className="flex items-center text-[10px] text-white font-black uppercase tracking-widest gap-3">
-                    <div className="w-1.5 h-1.5 bg-purple-600 rounded-full" />
-                    {feature}
-                  </li>
-                ))}
-              </ul>
 
               <button 
                 onClick={() => handleSelectPlan(plan)}
                 disabled={loadingPlan !== null}
                 className={`w-full py-5 rounded-full font-black uppercase tracking-widest text-[10px] transition-all duration-500 flex items-center justify-center gap-2 ${
-                  plan.isPopular 
+                  plan.name.includes("Luxe")
                   ? 'bg-purple-600 text-white hover:bg-white hover:text-black' 
                   : 'bg-white text-black hover:bg-purple-600 hover:text-white'
                 } ${loadingPlan === plan.name ? 'opacity-50 cursor-not-allowed' : ''}`}

@@ -27,5 +27,4 @@ dist-ssr
 gyo-app-685a1-firebase-adminsdk-*.json
 
 .env
-serviceAccount.json
 node_modules/
