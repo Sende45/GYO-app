@@ -1,8 +1,7 @@
 const User = require('../models/User');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 
 // --- CONNEXION (LOGIN) ---
-// C'est ici que tu utiliseras Yohane#6002
 exports.login = async (req, res) => {
     const { email, password } = req.body;
 
@@ -13,6 +12,13 @@ exports.login = async (req, res) => {
             return res.status(404).json({ message: "Utilisateur non trouvé" });
         }
 
+        // 🛡️ MODIF DE SÉCURITÉ : Vérifier si le mot de passe existe en base
+        // Si tu as un ancien compte sans mot de passe (ex: pur Firebase), ça évitera le crash 500
+        if (!user.password) {
+            console.error(`🚨 L'utilisateur ${email} n'a pas de mot de passe défini dans MongoDB.`);
+            return res.status(400).json({ message: "Compte mal configuré. Contactez l'administrateur." });
+        }
+
         // 2. Comparer le mot de passe envoyé avec le hash stocké en DB
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
@@ -20,7 +26,6 @@ exports.login = async (req, res) => {
         }
 
         // 3. Réponse en cas de succès
-        // On renvoie les infos de l'utilisateur (sans le password) pour le frontend
         const { password: _, ...userWithoutPassword } = user.toObject();
         res.status(200).json({
             message: "Connexion réussie",
@@ -28,15 +33,15 @@ exports.login = async (req, res) => {
         });
 
     } catch (err) {
-        console.error("❌ Erreur Login:", err.message);
-        res.status(500).json({ error: "Erreur lors de la connexion" });
+        // Log précis pour Render
+        console.error("❌ Erreur Critique Login:", err.message);
+        res.status(500).json({ error: "Erreur interne lors de la connexion" });
     }
 };
 
 // --- RÉCUPÉRER UN PROFIL ---
 exports.getUserProfile = async (req, res) => {
     try {
-        // On cherche par _id (MongoDB) ou email selon ta préférence
         const user = await User.findOne({ email: req.params.email });
         
         if (!user) {
