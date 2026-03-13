@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import api from '../api/axios'; // On utilise ton instance Axios MongoDB
+import api from '../api/axios'; 
 import logo from '../assets/logo.png'; 
 
 const AdminLogin = () => {
@@ -11,41 +11,48 @@ const AdminLogin = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
-  // AU CHARGEMENT : Vérifier si une session admin existe déjà dans le localStorage
+  // AU CHARGEMENT : Vérifier la session une seule fois
   useEffect(() => {
     const userData = localStorage.getItem('gyo_user');
     if (userData) {
-      const user = JSON.parse(userData);
-      if (user.role === 'admin' || user.role === 'agent') {
-        navigate('/admin-dashboard');
+      try {
+        const user = JSON.parse(userData);
+        // Si déjà admin, on redirige proprement sans boucler
+        if (user.role === 'admin' || user.role === 'agent') {
+          navigate('/admin-dashboard', { replace: true });
+        }
+      } catch (e) {
+        localStorage.removeItem('gyo_user'); // Nettoyage en cas de JSON corrompu
       }
     }
   }, [navigate]);
 
   const handleAdminLogin = async (e) => {
     e.preventDefault();
+    if (isLoading) return; // Empêche le double clic
+
     setIsLoading(true);
     setError('');
     
     try {
-      // 1. Appel à ton backend Render (MongoDB + Bcrypt)
+      // 1. Appel Backend (MongoDB + Bcryptjs)
       const response = await api.post('/users/login', { email, password });
-      
       const userData = response.data.user;
 
-      // 2. Vérification du grade (Admin ou Agent uniquement)
+      // 2. Vérification et Stockage
       if (userData.role === 'admin' || userData.role === 'agent') {
-        // On stocke l'utilisateur pour l'intercepteur Axios
         localStorage.setItem('gyo_user', JSON.stringify(userData));
         console.log("Accès Terminal autorisé : " + userData.role);
-        navigate('/admin-dashboard'); 
+        
+        // Redirection immédiate
+        navigate('/admin-dashboard', { replace: true }); 
       } else {
         setError("Accès refusé. Réservé au staff GYO.");
       }
 
     } catch (err) {
       console.error("Erreur Login Admin:", err);
-      const message = err.response?.data?.message || "Identifiants de sécurité incorrects.";
+      const message = err.response?.data?.message || "Identifiants incorrects.";
       setError(message);
     } finally {
       setIsLoading(false);
@@ -62,7 +69,6 @@ const AdminLogin = () => {
         className="max-w-md w-full z-10"
       >
         <div className="bg-white/5 backdrop-blur-xl border border-white/5 p-10 rounded-2xl shadow-2xl">
-          
           <div className="text-center mb-10">
             <img src={logo} alt="Logo GYO" className="h-10 mx-auto mb-6 grayscale brightness-200" />
             <h2 className="text-sm font-black text-gyo-white tracking-[0.4em] uppercase">
@@ -89,6 +95,7 @@ const AdminLogin = () => {
                 placeholder="admin@gyospa.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
                 required
               />
             </div>
@@ -101,6 +108,7 @@ const AdminLogin = () => {
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
                 required
               />
             </div>
@@ -110,7 +118,7 @@ const AdminLogin = () => {
               disabled={isLoading}
               className="w-full py-4 bg-gyo-white text-gyo-black rounded-xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-gyo-purple hover:text-gyo-white transition-all duration-300 disabled:opacity-50"
             >
-              {isLoading ? 'Authentification...' : 'Initialiser la session'}
+              {isLoading ? 'Vérification...' : 'Initialiser la session'}
             </button>
           </form>
 

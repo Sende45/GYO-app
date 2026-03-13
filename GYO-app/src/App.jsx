@@ -25,17 +25,29 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
+  // ✅ SYNC AUTH : Firebase + MongoDB
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
+    // 1. Écouter Firebase
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      const mongoUser = localStorage.getItem('gyo_user');
+      
+      if (mongoUser) {
+        // Priorité à la session MongoDB (Admin/Staff)
+        setUser(JSON.parse(mongoUser));
+      } else if (firebaseUser) {
+        // Repli sur Firebase pour les clients existants
+        setUser(firebaseUser);
+      } else {
+        setUser(null);
+      }
       setLoading(false);
     });
+
     return () => unsubscribe();
   }, []);
 
   const closeMenu = () => setIsMenuOpen(false);
 
-  // Empêche le scroll quand le menu mobile est ouvert
   useEffect(() => {
     document.body.style.overflow = isMenuOpen ? 'hidden' : 'unset';
   }, [isMenuOpen]);
@@ -50,9 +62,7 @@ function App() {
 
   return (
     <Router>
-      {/* Barre de navigation simplifiée et propre */}
       <nav className="fixed top-0 w-full z-[100] bg-white/90 backdrop-blur-md border-b border-gray-100 px-4 md:px-8 py-3 md:py-4 flex justify-between items-center transition-all duration-300">
-        
         <Link to="/" onClick={closeMenu} className="flex items-center gap-2 z-[110] shrink-0">
           <img src={logo} alt="GYO Logo" className="h-7 md:h-10 w-auto object-contain" />
           <span className="text-lg md:text-2xl font-black text-gyo-black tracking-tighter whitespace-nowrap uppercase">
@@ -60,7 +70,6 @@ function App() {
           </span>
         </Link>
         
-        {/* Menu Desktop */}
         <div className="hidden lg:flex space-x-8 font-bold text-[10px] uppercase tracking-[0.2em] text-gyo-black items-center">
           <Link to="/" className="hover:text-gyo-purple transition-colors">Accueil</Link>
           <Link to="/reserver" className="hover:text-gyo-purple transition-colors">Réservations</Link>
@@ -69,14 +78,13 @@ function App() {
           <Link to="/mon-compte" className="text-gyo-purple font-black px-4 py-2 border-2 border-gyo-purple rounded-full hover:bg-gyo-purple hover:text-white transition-all">Mon Espace</Link>
         </div>
 
-        {/* Auth & Burger */}
         <div className="flex items-center gap-4">
           <div className="hidden sm:block">
             {!user ? (
               <Link to="/login" className="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-gyo-black transition-colors">Connexion</Link>
             ) : (
               <Link to="/mon-compte" className="w-8 h-8 md:w-10 md:h-10 bg-purple-100 rounded-full flex items-center justify-center text-[10px] font-black text-gyo-purple uppercase border border-purple-200 shadow-sm">
-                {user.email?.charAt(0)}
+                {user.email?.charAt(0) || user.displayName?.charAt(0)}
               </Link>
             )}
           </div>
@@ -84,7 +92,6 @@ function App() {
           <button 
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             className="lg:hidden relative z-[110] w-10 h-10 flex flex-col justify-center items-center gap-1.5 focus:outline-none"
-            aria-label="Menu"
           >
             <span className={`block w-6 h-0.5 bg-gyo-black transition-all duration-300 ${isMenuOpen ? 'rotate-45 translate-y-2' : ''}`}></span>
             <span className={`block w-6 h-0.5 bg-gyo-black transition-all duration-300 ${isMenuOpen ? 'opacity-0' : 'w-4'}`}></span>
@@ -92,7 +99,6 @@ function App() {
           </button>
         </div>
 
-        {/* Menu Mobile - Optimisé Tailwind v4 */}
         <div className={`fixed inset-0 bg-white/98 backdrop-blur-xl z-[100] flex flex-col items-center justify-center space-y-6 transition-all duration-500 ease-in-out ${isMenuOpen ? 'opacity-100 visible' : 'opacity-0 invisible pointer-events-none'}`}>
           <div className="flex flex-col items-center space-y-8">
              <Link to="/" onClick={closeMenu} className="text-3xl font-black uppercase tracking-tighter hover:text-gyo-purple transition-all">Accueil</Link>
@@ -101,14 +107,10 @@ function App() {
              <Link to="/offrir" onClick={closeMenu} className="text-3xl font-black uppercase tracking-tighter hover:text-gyo-purple transition-all">Offrir</Link>
              <hr className="w-12 border-gyo-purple border-2" />
              <Link to="/mon-compte" onClick={closeMenu} className="text-3xl font-black uppercase tracking-tighter text-gyo-purple">Mon Espace</Link>
-             {!user && (
-               <Link to="/login" onClick={closeMenu} className="text-sm font-black uppercase tracking-[0.2em] text-gray-400">Se connecter</Link>
-             )}
           </div>
         </div>
       </nav>
 
-      {/* Conteneur principal avec marges adaptatives */}
       <main className="pt-20 md:pt-24 min-h-screen w-full overflow-x-hidden bg-gyo-white">
         <Routes>
           <Route path="/" element={<Home />} />
@@ -116,11 +118,20 @@ function App() {
           <Route path="/abonnements" element={<Subscriptions />} />
           <Route path="/success" element={<SuccessPage />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/offrir" element={user ? <GiftCards /> : <Navigate to="/login" />} />
-          <Route path="/mon-compte" element={user ? <UserAccount /> : <Navigate to="/login" />} />
-          <Route path="/admin-dashboard" element={<AdminDashboard />} />
+          
+          {/* ✅ ROUTES PROTÉGÉES AMÉLIORÉES */}
+          <Route path="/offrir" element={user ? <GiftCards /> : <Navigate to="/login" replace />} />
+          <Route path="/mon-compte" element={user ? <UserAccount /> : <Navigate to="/login" replace />} />
+          
+          {/* ✅ PROTECTION DASHBOARD */}
+          <Route path="/admin-dashboard" element={
+            (user && (user.role === 'admin' || user.role === 'agent')) 
+            ? <AdminDashboard /> 
+            : <Navigate to="/admin" replace />
+          } />
+          
           <Route path="/admin" element={<AdminLogin />} />
-          <Route path="*" element={<Navigate to="/" />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
 
