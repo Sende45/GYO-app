@@ -27,9 +27,9 @@ const Home = () => {
   }, []);
 
   const univers = [
-    { title: "SPA & MASSAGES", desc: "Soins signatures et rituels détente.", price: "Dès 45€", delay: 0.1 },
-    { title: "ONGLERIE LUXE", desc: "Manucure Russe et pose de gel expert.", price: "Dès 40€", delay: 0.2 },
-    { title: "SALON DE COIFFURE", desc: "Coupe Homme & Femme haute couture.", price: "Dès 30€", delay: 0.3 }
+    { title: "SPA & MASSAGES", desc: "Soins signatures et rituels détente.", price: "Dès 30000FCFA", delay: 0.1 },
+    { title: "ONGLERIE LUXE", desc: "Manucure Russe et pose de gel expert.", price: "Dès 26000FCFA", delay: 0.2 },
+    { title: "SALON DE COIFFURE", desc: "Coupe Homme & Femme haute couture.", price: "Dès 20000FCFA", delay: 0.3 }
   ];
 
   return (
