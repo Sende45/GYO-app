@@ -7,7 +7,7 @@ const Home = () => {
   const fullText = "Une expérience sensorielle unique où le temps s'arrête.";
   const containerRef = useRef(null);
   
-  // 1. Logique pour le curseur magnétique et mouvement de souris
+  // Mouvement de souris pour l'interactivité
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
   
@@ -38,9 +38,9 @@ const Home = () => {
   }, []);
 
   const univers = [
-    { title: "SPA & MASSAGES", desc: "Soins signatures et rituels détente.", price: "Dès 30000FCFA", img: "https://images.pexels.com/photos/3757942/pexels-photo-3757942.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2" },
-    { title: "ONGLERIE LUXE", desc: "Manucure Russe et pose de gel expert.", price: "Dès 26000FCFA", img: "https://images.pexels.com/photos/3997391/pexels-photo-3997391.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2" },
-    { title: "SALON DE COIFFURE", desc: "Coupe Homme & Femme haute couture.", price: "Dès 20000FCFA", img: "https://images.pexels.com/photos/3993444/pexels-photo-3993444.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2" }
+    { title: "SPA & MASSAGES", desc: "Soins signatures et rituels détente.", img: "https://images.pexels.com/photos/3757942/pexels-photo-3757942.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2" },
+    { title: "ONGLERIE LUXE", desc: "Manucure Russe et pose de gel expert.", img: "https://images.pexels.com/photos/3997391/pexels-photo-3997391.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2" },
+    { title: "SALON DE COIFFURE", desc: "Coupe Homme & Femme haute couture.", img: "https://images.pexels.com/photos/3993444/pexels-photo-3993444.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2" }
   ];
 
   return (
@@ -50,13 +50,12 @@ const Home = () => {
       className="bg-white selection:bg-purple-200 selection:text-purple-900 overflow-x-hidden"
     >
       
-      {/* 2. PROGRESS BAR AVEC GLOW */}
+      {/* PROGRESS BAR */}
       <motion.div className="fixed top-0 left-0 right-0 h-[3px] bg-purple-600 z-[100] origin-left shadow-[0_0_15px_rgba(147,51,234,0.5)]" style={{ scaleX }} />
 
-      {/* 3. HERO SECTION DYNAMIQUE */}
+      {/* HERO SECTION */}
       <section className="relative h-screen flex flex-col items-center justify-center overflow-hidden bg-[#050505]">
         
-        {/* Cercles de lumière qui suivent la souris (doucement) */}
         <motion.div 
           style={{ x: useTransform(mouseX, [0, window.innerWidth], [-20, 20]), y: useTransform(mouseY, [0, window.innerHeight], [-20, 20]) }}
           className="absolute inset-0 z-0 opacity-40"
@@ -93,19 +92,15 @@ const Home = () => {
                 </motion.span>
             </h1>
 
-            <div className="min-h-[60px] mb-12">
-                <p className="text-gray-400 text-lg md:text-xl font-light italic max-w-xl mx-auto leading-relaxed">
+            <div className="min-h-[60px] mb-12 text-center flex justify-center">
+                <p className="text-gray-400 text-lg md:text-xl font-light italic max-w-xl leading-relaxed">
                     {displayText}
                     <motion.span animate={{ scale: [1, 1.5, 1] }} transition={{ repeat: Infinity, duration: 1 }} className="inline-block w-2 h-2 bg-purple-600 rounded-full ml-3" />
                 </p>
             </div>
 
-            {/* BOUTON MAGNETIQUE INTERACTIF */}
-            <motion.div 
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              className="relative inline-block"
-            >
+            {/* LIEN VERS BOOKING PAGE */}
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                 <Link 
                     to="/reserver" 
                     className="group relative inline-flex items-center justify-center px-16 py-7 bg-white text-black font-black uppercase text-[11px] tracking-[0.4em] rounded-full overflow-hidden transition-all duration-500 shadow-[0_0_30px_rgba(255,255,255,0.1)] hover:shadow-purple-600/40"
@@ -115,90 +110,76 @@ const Home = () => {
                 </Link>
             </motion.div>
         </div>
-
-        <motion.div 
-          animate={{ y: [0, 15, 0] }} 
-          transition={{ repeat: Infinity, duration: 2 }}
-          className="absolute bottom-10 left-1/2 -translate-x-1/2 opacity-30"
-        >
-            <div className="w-6 h-10 border-2 border-white rounded-full flex justify-center p-1">
-              <motion.div className="w-1 h-2 bg-purple-600 rounded-full" />
-            </div>
-        </motion.div>
       </section>
 
-      {/* 4. UNIVERS SECTION : INTERACTION AU SURVOL (REVEAL) */}
+      {/* SECTION UNIVERS (PRIX SUPPRIMÉS POUR PLUS DE CLASSE) */}
       <section className="py-32 md:py-56 px-6 bg-white max-w-7xl mx-auto">
             <div className="flex flex-col md:flex-row justify-between items-baseline mb-40 border-b border-gray-100 pb-12">
                 <h2 className="text-5xl md:text-9xl font-black tracking-tighter uppercase leading-none text-black italic">
                     Pure <br /> <span className="text-purple-600 not-italic">Essence.</span>
                 </h2>
                 <p className="max-w-xs text-gray-400 font-medium text-lg mt-8 md:mt-0">
-                    Chaque soin est une signature. <br /> Cliquez pour explorer le rituel.
+                    L'excellence du soin. <br /> Cliquez pour réserver votre rituel.
                 </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-12 md:gap-20">
                 {univers.map((item, index) => (
-                    <motion.div 
-                        key={index}
-                        initial={{ opacity: 0, y: 50 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        whileHover={{ y: -20 }}
-                        className="group cursor-pointer"
-                    >
-                        <div className="relative h-[550px] md:h-[700px] w-full overflow-hidden rounded-[3rem] mb-10 shadow-2xl transition-all duration-700 group-hover:shadow-purple-600/20">
-                            <motion.img 
-                                whileHover={{ scale: 1.15 }}
-                                transition={{ duration: 1.2 }}
-                                src={item.img} 
-                                alt={item.title} 
-                                className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-1000"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80 group-hover:opacity-40 transition-opacity duration-700" />
-                            
-                            <div className="absolute inset-0 p-12 flex flex-col justify-end">
-                                <span className="text-purple-500 font-black text-xs mb-4 block translate-y-8 group-hover:translate-y-0 transition-transform duration-500">0{index+1} /</span>
-                                <h3 className="text-white text-4xl font-black uppercase leading-[0.85] mb-6">
-                                    {item.title}
-                                </h3>
-                                <p className="text-white/0 group-hover:text-white/100 transition-all duration-500 text-sm italic mb-8">
-                                    {item.desc}
-                                </p>
-                                <motion.button className="w-12 h-12 bg-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-500 scale-50 group-hover:scale-100">
-                                   <ArrowUpRight size={20} className="text-purple-600" />
-                                </motion.button>
-                            </div>
-                        </div>
-                    </motion.div>
+                    <Link to="/reserver" key={index}> {/* Chaque carte mène à la réservation */}
+                      <motion.div 
+                          initial={{ opacity: 0, y: 50 }}
+                          whileInView={{ opacity: 1, y: 0 }}
+                          viewport={{ once: true }}
+                          whileHover={{ y: -20 }}
+                          className="group cursor-pointer"
+                      >
+                          <div className="relative h-[550px] md:h-[700px] w-full overflow-hidden rounded-[3rem] mb-10 shadow-2xl transition-all duration-700 group-hover:shadow-purple-600/20">
+                              <motion.img 
+                                  whileHover={{ scale: 1.15 }}
+                                  transition={{ duration: 1.2 }}
+                                  src={item.img} 
+                                  alt={item.title} 
+                                  className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-1000"
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80 group-hover:opacity-40 transition-opacity duration-700" />
+                              
+                              <div className="absolute inset-0 p-12 flex flex-col justify-end">
+                                  <span className="text-purple-500 font-black text-xs mb-4 block translate-y-8 group-hover:translate-y-0 transition-transform duration-500">0{index+1} /</span>
+                                  <h3 className="text-white text-4xl font-black uppercase leading-[0.85] mb-6">
+                                      {item.title}
+                                  </h3>
+                                  <p className="text-white/0 group-hover:text-white/100 transition-all duration-500 text-sm italic mb-8">
+                                      {item.desc}
+                                  </p>
+                                  <motion.div className="w-12 h-12 bg-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-500 scale-50 group-hover:scale-100">
+                                    <ArrowUpRight size={20} className="text-purple-600" />
+                                  </motion.div>
+                              </div>
+                          </div>
+                      </motion.div>
+                    </Link>
                 ))}
             </div>
       </section>
 
-      {/* 5. CTA FINAL : EFFET "PULSE" ET TEXTE GEANT */}
+      {/* CTA FINAL */}
       <section className="bg-[#050505] py-40 md:py-64 px-6 text-center relative overflow-hidden">
-         {/* Background pulse effect */}
          <motion.div 
             animate={{ scale: [1, 1.2, 1], opacity: [0.1, 0.2, 0.1] }}
             transition={{ duration: 8, repeat: Infinity }}
             className="absolute inset-0 bg-purple-600 blur-[200px] rounded-full"
          />
          
-         <motion.div
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            className="relative z-10"
-         >
+         <motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} className="relative z-10">
             <h2 className="text-white text-6xl md:text-[12vw] font-black uppercase tracking-tighter mb-20 leading-[0.75]">
                 Ready for <br /> <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-purple-500 to-purple-800">Metamorphosis?</span>
             </h2>
             
             <Link 
-                to="/contact"
+                to="/reserver"
                 className="group relative inline-flex items-center gap-8 text-white px-12 py-6 rounded-full border border-white/20 hover:border-purple-600 transition-all duration-700 overflow-hidden"
             >
-                <span className="relative z-10 text-[12px] font-black uppercase tracking-[0.5em]">Rejoindre le cercle</span>
+                <span className="relative z-10 text-[12px] font-black uppercase tracking-[0.5em]">Lancer la réservation</span>
                 <div className="absolute inset-0 bg-purple-600 scale-x-0 group-hover:scale-x-100 origin-right transition-transform duration-700 ease-out" />
             </Link>
          </motion.div>
@@ -207,7 +188,6 @@ const Home = () => {
   );
 };
 
-// Petit composant Icône pour la propreté
 const ArrowUpRight = ({ size, className }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={className}>
     <line x1="7" y1="17" x2="17" y2="7"></line>
