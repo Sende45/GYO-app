@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import api from '../api/axios'; 
 import logo from '../assets/logo.png'; 
+import useGyoStore from '../store/useGyoStore'; // Import de ton store Zustand
 
 const AdminLogin = () => {
   const [email, setEmail] = useState('');
@@ -10,6 +11,9 @@ const AdminLogin = () => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  
+  // Utilisation de l'action du store
+  const { setUser } = useGyoStore();
 
   // AU CHARGEMENT : Vérifier la session une seule fois
   useEffect(() => {
@@ -17,19 +21,19 @@ const AdminLogin = () => {
     if (userData) {
       try {
         const user = JSON.parse(userData);
-        // Si déjà admin, on redirige proprement sans boucler
+        // Si déjà admin/agent, on redirige proprement
         if (user.role === 'admin' || user.role === 'agent') {
           navigate('/admin-dashboard', { replace: true });
         }
       } catch (e) {
-        localStorage.removeItem('gyo_user'); // Nettoyage en cas de JSON corrompu
+        localStorage.removeItem('gyo_user');
       }
     }
   }, [navigate]);
 
   const handleAdminLogin = async (e) => {
     e.preventDefault();
-    if (isLoading) return; // Empêche le double clic
+    if (isLoading) return;
 
     setIsLoading(true);
     setError('');
@@ -39,12 +43,14 @@ const AdminLogin = () => {
       const response = await api.post('/users/login', { email, password });
       const userData = response.data.user;
 
-      // 2. Vérification et Stockage
+      // 2. Vérification du rôle
       if (userData.role === 'admin' || userData.role === 'agent') {
-        localStorage.setItem('gyo_user', JSON.stringify(userData));
+        // ✅ Mise à jour du Store Zustand (qui gère aussi le localStorage)
+        setUser(userData);
+        
         console.log("Accès Terminal autorisé : " + userData.role);
         
-        // Redirection immédiate
+        // 3. Redirection immédiate
         navigate('/admin-dashboard', { replace: true }); 
       } else {
         setError("Accès refusé. Réservé au staff GYO.");
@@ -52,7 +58,7 @@ const AdminLogin = () => {
 
     } catch (err) {
       console.error("Erreur Login Admin:", err);
-      const message = err.response?.data?.message || "Identifiants incorrects.";
+      const message = err.response?.data?.message || "Identifiants de sécurité incorrects.";
       setError(message);
     } finally {
       setIsLoading(false);
