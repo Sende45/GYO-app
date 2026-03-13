@@ -5,19 +5,29 @@ import tailwindcss from '@tailwindcss/vite'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
+    tailwindcss(), // On place Tailwind en premier pour qu'il traite le CSS avant React
     react(),
-    tailwindcss(),
   ],
+  // Configuration explicite pour Vercel
+  build: {
+    outDir: 'dist',
+    sourcemap: false,
+    emptyOutDir: true, // Nettoie le dossier dist à chaque build
+  },
+  // Configuration Vitest (Tests)
   test: {
     globals: true,
     environment: 'jsdom',
-    setupFiles: './src/setupTests.js',
+    //setupFiles: './src/setupTests.js', // À décommenter si tu as ce fichier
     exclude: ['node_modules', 'dist'],
-    // AJOUTS CRUCIAUX :
-    css: true, // Permet de traiter les fichiers CSS (indispensable pour Tailwind v4)
+    css: {
+      modules: {
+        classNameStrategy: 'non-scoped',
+      },
+    },
     server: {
       deps: {
-        inline: [/tailwindcss/] // Force le traitement de Tailwind dans les tests
+        inline: [/@tailwindcss\/vite/, /tailwindcss/]
       }
     }
   },

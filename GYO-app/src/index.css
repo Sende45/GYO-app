@@ -1,38 +1,54 @@
 @import "tailwindcss";
 
-/* 1. Tes animations (on les garde, elles sont top) */
-@keyframes slideUp {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.animate-slideUp {
-  animation: slideUp 0.5s ease forwards;
+@theme {
+  /* 1. COULEURS GYO PERSONNALISÉES (Syntaxe v4) */
+  --color-gyo-purple: #7c3aed;
+  --color-gyo-black: #111827;
+  --color-gyo-white: #f9fafb;
+
+  /* 2. DÉCLARATION DES ANIMATIONS DANS LE THÈME */
+  --animate-slide-up: slideUp 0.5s ease forwards;
+
+  @keyframes slideUp {
+    from { 
+      opacity: 0; 
+      transform: translateY(10px); 
+    }
+    to { 
+      opacity: 1; 
+      transform: translateY(0); 
+    }
+  }
 }
 
-/* 2. RETOUR DU CURSEUR ET FLUIDITÉ */
-html, body {
-  /* On s'assure que le curseur par défaut est bien là */
-  cursor: auto !important;
-  scroll-behavior: smooth;
-  -webkit-font-smoothing: antialiased;
-  background-color: white;
+/* 3. CONFIGURATION GLOBALE & CURSEURS */
+@layer base {
+  html, body {
+    cursor: auto !important;
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    /* Utilisation de ta variable de thème */
+    background-color: var(--color-gyo-white);
+  }
+
+  a, button, .cursor-pointer {
+    cursor: pointer !important;
+  }
 }
 
-/* On force le curseur "main" sur les éléments cliquables */
-a, button, .cursor-pointer {
-  cursor: pointer !important;
+/* 4. OPTIMISATION GPU & EFFETS (Performances) */
+@layer utilities {
+  .backdrop-blur-md, 
+  .backdrop-blur-xl, 
+  [class*="blur-"] {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    will-change: transform;
+  }
 }
 
-/* 3. OPTIMISATION GPU (Pour supprimer les lenteurs) */
-/* Cette règle aide le navigateur à gérer les flous (blur) sans ramer */
-.backdrop-blur-md, .backdrop-blur-xl, [class*="blur-"] {
-  transform: translateZ(0);
-  backface-visibility: hidden;
-  will-change: transform;
-}
-
-/* 4. SÉLECTION PERSONNALISÉE */
+/* 5. SÉLECTION PERSONNALISÉE */
 ::selection {
-  background-color: #9333ea; /* Purple-600 */
+  background-color: #9333ea;
   color: white;
 }
