@@ -14,24 +14,38 @@ const app = express();
 
 // --- MIDDLEWARES ---
 
-/**
- * STRIPE WEBHOOK : 
- * Toujours en premier et en format RAW pour la vérification de signature
- */
+// STRIPE WEBHOOK : En format RAW (Impératif)
 app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
 
 // Parser JSON pour tout le reste
 app.use(express.json());
 
-// Configuration CORS optimisée pour Abidjan/Production
+// ✅ CONFIGURATION CORS DYNAMIQUE (Fix pour Vercel Preview)
+const allowedOrigins = [
+    'https://gyo-app.vercel.app', 
+    'http://localhost:3000', 
+    'http://localhost:5173'
+];
+
 app.use(cors({
-    origin: [
-        'https://gyo-app.vercel.app', 
-        'http://localhost:3000', 
-        'http://localhost:5173'
-    ],
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    credentials: true
+    origin: function (origin, callback) {
+        // Autorise les requêtes sans origine (ex: Postman)
+        if (!origin) return callback(null, true);
+        
+        // Autorise les domaines dans la liste OR les domaines de preview Vercel
+        const isAllowed = allowedOrigins.includes(origin) || 
+                         origin.endsWith('.vercel.app'); // ✅ Autorise tous les sous-domaines Vercel
+
+        if (isAllowed) {
+            callback(null, true);
+        } else {
+            console.error(`🚨 CORS bloqué pour l'origine : ${origin}`);
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'stripe-signature']
 }));
 
 // --- DÉCLARATION DES ROUTES API ---
@@ -40,14 +54,13 @@ app.use('/api/prices', priceRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/users', userRoutes);
 
-// --- GESTION DES ERREURS 404 ---
+// --- GESTION DES ERREURS ---
 app.use((req, res) => {
     res.status(404).json({ message: "Route non trouvée sur le serveur GYO" });
 });
 
-// --- GESTIONNAIRE D'ERREURS GLOBAL ---
 app.use((err, req, res, next) => {
-    console.error("🚨 Erreur Détectée:", err.stack);
+    console.error("🚨 Erreur Détectée:", err.message);
     res.status(500).json({ error: "Erreur interne du serveur GYO" });
 });
 
