@@ -1,34 +1,37 @@
-const admin = require('firebase-admin');
 const User = require('../models/User');
 
+/**
+ * Middleware de sécurité GYO : 
+ * Vérifie l'identité via l'ID utilisateur stocké dans MongoDB.
+ */
 const verifyAdmin = async (req, res, next) => {
-    // 1. Récupération du Token dans le header Authorization
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({ error: "Accès refusé. Token manquant." });
-    }
-
-    const idToken = authHeader.split('Bearer ')[1];
-
     try {
-        // 2. Vérification du token via Firebase Admin
-        const decodedToken = await admin.auth().verifyIdToken(idToken);
-        const userId = decodedToken.uid;
+        // On récupère l'ID envoyé par le frontend (AdminDashboard)
+        // On peut le passer via un header personnalisé pour plus de simplicité
+        const userId = req.headers['x-user-id']; 
 
-        // 3. Vérification du rôle dans MongoDB
-        const user = await User.findOne({ userId: userId });
-
-        if (!user || user.role !== 'admin') {
-            console.error(`🚨 Tentative d'accès non autorisé par UID: ${userId}`);
-            return res.status(403).json({ error: "Privilèges insuffisants. Accès interdit." });
+        if (!userId) {
+            return res.status(401).json({ error: "Identification manquante (ID requis)." });
         }
 
-        // 4. Si tout est OK, on continue
+        // Vérification directe dans ta base MongoDB "GYO"
+        const user = await User.findOne({ userId: userId });
+
+        if (!user) {
+            return res.status(404).json({ error: "Utilisateur introuvable dans la base GYO." });
+        }
+
+        if (user.role !== 'admin') {
+            console.warn(`🚨 Tentative d'accès refusée : UID ${userId} n'est pas admin.`);
+            return res.status(403).json({ error: "Accès interdit. Droits administrateur requis." });
+        }
+
+        // Si tout est OK, on attache l'utilisateur à la requête et on passe à la suite
         req.user = user;
         next();
     } catch (error) {
-        console.error("❌ Erreur de validation Token:", error.message);
-        res.status(401).json({ error: "Session expirée ou invalide." });
+        console.error("❌ Erreur Middleware Sécurité :", error.message);
+        res.status(500).json({ error: "Erreur interne lors de la vérification des droits." });
     }
 };
 
