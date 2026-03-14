@@ -1,45 +1,44 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import api from '../api/axios'; // On utilise ton instance Axios
-import { auth } from '../firebase'; // Gardé uniquement pour le signOut
+import api from '../api/axios'; 
 
 const UserAccount = () => {
   const [myBookings, setMyBookings] = useState([]);
-  const [myGiftCards, setMyGiftCards] = useState([]);
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
     const fetchUserData = async () => {
-      const mongoUser = localStorage.getItem('gyo_user');
+      // MODIF : Utilisation de la clé 'user' cohérente avec Login.jsx
+      const storedData = localStorage.getItem('user');
       
-      if (!mongoUser) {
+      if (!storedData) {
         navigate('/login', { replace: true });
         return;
       }
 
       try {
-        const storedUser = JSON.parse(mongoUser);
+        const storedUser = JSON.parse(storedData);
         
-        // ✅ 1. Récupération du profil complet depuis MongoDB
+        // 1. Récupération du profil complet depuis MongoDB
+        // On utilise l'email stocké pour récupérer les données à jour (crédits, sessions, etc.)
         const profileRes = await api.get(`/users/profile/${storedUser.email}`);
         setUserProfile(profileRes.data);
 
-        // ✅ 2. Récupération des réservations (Tu devras créer cette route si elle n'existe pas)
-        // Sinon, on peut filtrer les bookings généraux par email
+        // 2. Récupération des réservations
+        // On filtre par email pour n'afficher que celles de l'utilisateur
         const bookingsRes = await api.get('/bookings');
         const userBookings = bookingsRes.data.filter(b => b.email === storedUser.email);
         setMyBookings(userBookings);
 
-        // ✅ 3. Cartes Cadeaux (à adapter selon ton backend)
-        setMyGiftCards([]); 
-
       } catch (err) {
         console.error("Erreur chargement données MongoDB:", err);
-        // Si erreur 401/403, on déconnecte
-        if (err.response?.status === 401) handleFullLogout();
+        // Si le profil n'est pas trouvé ou erreur d'auth, on déconnecte
+        if (err.response?.status === 401 || err.response?.status === 404) {
+          handleFullLogout();
+        }
       } finally {
         setLoading(false);
       }
@@ -48,20 +47,14 @@ const UserAccount = () => {
     fetchUserData();
   }, [navigate]);
 
-  const handleFullLogout = async () => {
-    try {
-      await auth.signOut(); // Déconnexion Firebase par sécurité
-      localStorage.removeItem('gyo_user'); // Suppression session MongoDB
-      navigate('/', { replace: true });
-      window.location.reload();
-    } catch (error) {
-      console.error("Erreur logout:", error);
-    }
-  };
-
-  const copyToClipboard = (code) => {
-    navigator.clipboard.writeText(code);
-    alert("Code copié !");
+  const handleFullLogout = () => {
+    // Nettoyage complet des traces locales
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+    
+    navigate('/', { replace: true });
+    // Optionnel : reload pour réinitialiser tous les états de l'app
+    window.location.reload();
   };
 
   if (loading) return (
@@ -74,38 +67,82 @@ const UserAccount = () => {
     <div className="min-h-screen bg-black text-white p-6 pb-20">
       <div className="max-w-4xl mx-auto pt-10">
         
-        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-12 flex justify-between items-end">
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }} 
+          animate={{ opacity: 1, y: 0 }} 
+          className="mb-12 flex justify-between items-end"
+        >
           <div>
             <p className="text-purple-500 font-black text-[10px] uppercase tracking-[0.4em] mb-2">Espace Privé</p>
             <h1 className="text-4xl font-black uppercase tracking-tighter">
-              Bienvenue, <span className="text-purple-500 italic">{userProfile?.name || userProfile?.email?.split('@')[0] || 'Membre GYO'}</span>
+              Bienvenue, <span className="text-purple-500 italic">
+                {userProfile?.firstName || userProfile?.name || userProfile?.email?.split('@')[0]}
+              </span>
             </h1>
           </div>
         </motion.div>
 
-        {/* SECTION ABONNEMENT (MongoDB) */}
-        {userProfile?.subscription?.status === 'active' ? (
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="mb-10 p-8 rounded-[2.5rem] bg-gradient-to-br from-purple-600 to-indigo-900 shadow-2xl border border-white/10">
+        {/* SECTION ABONNEMENT (Données MongoDB dynamiques) */}
+        {userProfile?.subscription?.status === 'active' || userProfile?.remainingSessions > 0 ? (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }} 
+            animate={{ opacity: 1, scale: 1 }} 
+            className="mb-10 p-8 rounded-[2.5rem] bg-gradient-to-br from-purple-600 to-indigo-900 shadow-2xl border border-white/10"
+          >
             <div className="flex justify-between items-start mb-8">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest opacity-70">Abonnement Actif</p>
-                <h3 className="text-3xl font-black uppercase italic">{userProfile.subscription.planName}</h3>
+                <p className="text-[10px] font-black uppercase tracking-widest opacity-70">Statut du Compte</p>
+                <h3 className="text-3xl font-black uppercase italic">
+                  {userProfile?.subscription?.planName || "Membre Actif"}
+                </h3>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="bg-black/30 p-5 rounded-2xl border border-white/5">
                 <p className="text-[9px] uppercase font-bold opacity-60 mb-1">Séances Restantes</p>
-                <p className="text-3xl font-black tracking-tighter">{userProfile.subscription.remainingSessions}</p>
+                <p className="text-3xl font-black tracking-tighter">
+                  {userProfile?.remainingSessions ?? userProfile?.subscription?.remainingSessions ?? 0}
+                </p>
+              </div>
+              <div className="bg-black/30 p-5 rounded-2xl border border-white/5">
+                <p className="text-[9px] uppercase font-bold opacity-60 mb-1">Rôle</p>
+                <p className="text-xl font-black tracking-tighter uppercase text-purple-300">
+                  {userProfile?.role}
+                </p>
               </div>
             </div>
           </motion.div>
         ) : (
-          <div className="mb-10 p-6 rounded-3xl border border-dashed border-white/10 text-center">
-            <p className="text-[10px] text-gray-500 uppercase tracking-widest">Aucun abonnement actif</p>
+          <div className="mb-10 p-10 rounded-[2.5rem] border border-dashed border-white/10 text-center">
+            <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-4">Aucun abonnement ou crédit actif</p>
+            <button 
+              onClick={() => navigate('/abonnements')}
+              className="text-purple-500 font-black text-[10px] uppercase tracking-widest border border-purple-500/30 px-6 py-3 rounded-full hover:bg-purple-500 hover:text-white transition-all"
+            >
+              Découvrir les offres
+            </button>
           </div>
         )}
 
-        {/* ... (Garder tes boutons de réservation et cartes cadeaux ici) ... */}
+        {/* SECTION RÉSERVATIONS */}
+        <div className="mt-12">
+            <h2 className="text-xl font-black uppercase tracking-widest mb-6">Mes Réservations</h2>
+            {myBookings.length > 0 ? (
+                <div className="space-y-4">
+                    {myBookings.map((booking, idx) => (
+                        <div key={idx} className="bg-white/5 p-4 rounded-2xl border border-white/5 flex justify-between items-center">
+                            <div>
+                                <p className="text-sm font-bold uppercase">{booking.service}</p>
+                                <p className="text-[10px] text-gray-400">{booking.date} à {booking.time}</p>
+                            </div>
+                            <span className="text-[9px] font-black px-3 py-1 bg-purple-500/20 text-purple-400 rounded-full uppercase">Confirmé</span>
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <p className="text-gray-600 text-[10px] uppercase font-bold">Aucune réservation en cours.</p>
+            )}
+        </div>
 
         <button 
           onClick={handleFullLogout}

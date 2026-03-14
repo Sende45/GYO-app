@@ -1,10 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-// Vérifie bien que ce chemin est correct vers ton fichier firebase.js
-import { auth, db } from '../firebase'; 
-import { collection, query, where, onSnapshot, doc, deleteDoc } from 'firebase/firestore';
-import { signOut, onAuthStateChanged } from 'firebase/auth';
 
 const Dashboard = () => {
   const [bookings, setBookings] = useState([]);
@@ -12,58 +8,62 @@ const Dashboard = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const navigate = useNavigate();
 
-  // 1. Gérer l'état de l'utilisateur (Indispensable pour éviter la page blanche)
+  // 1. Récupérer l'utilisateur depuis le localStorage (fini Firebase)
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setCurrentUser(user);
-      } else {
-        navigate('/login');
-      }
-    });
-    return () => unsubscribeAuth();
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      setCurrentUser(JSON.parse(storedUser));
+    } else {
+      navigate('/login');
+    }
   }, [navigate]);
 
-  // 2. Charger les réservations une fois l'utilisateur détecté
+  // 2. Charger les réservations depuis ton API Render
   useEffect(() => {
-    if (!currentUser) return;
+    const fetchBookings = async () => {
+      if (!currentUser?.email) return;
 
-    const q = query(
-      collection(db, "bookings"),
-      where("email", "==", currentUser.email)
-    );
+      try {
+        // Remplace par ton URL de récupération des réservations client
+        const response = await fetch(`https://gyo-backend.onrender.com/api/bookings/user/${currentUser.email}`);
+        const data = await response.json();
+        
+        if (response.ok) {
+          setBookings(data);
+        }
+      } catch (error) {
+        console.error("Erreur chargement réservations:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    const unsubscribeBookings = onSnapshot(q, (snapshot) => {
-      const bookingsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setBookings(bookingsData);
-      setLoading(false);
-    }, (error) => {
-      console.error("Erreur Firestore:", error);
-      setLoading(false);
-    });
-
-    return () => unsubscribeBookings();
+    fetchBookings();
   }, [currentUser]);
 
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      navigate('/login');
-    } catch (error) {
-      console.error("Erreur de déconnexion", error);
-    }
+  const handleLogout = () => {
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+    navigate('/login');
   };
 
   const deleteBooking = async (id) => {
     if (window.confirm("Annuler cette séance ?")) {
-      await deleteDoc(doc(db, "bookings", id));
+      try {
+        const response = await fetch(`https://gyo-backend.onrender.com/api/bookings/${id}`, {
+          method: 'DELETE'
+        });
+        
+        if (response.ok) {
+          // Mise à jour locale de l'interface
+          setBookings(bookings.filter(b => b._id !== id));
+        }
+      } catch (error) {
+        alert("Erreur lors de l'annulation");
+      }
     }
   };
 
-  // Ecran de chargement stylé pour éviter le blanc
   if (loading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
@@ -95,14 +95,18 @@ const Dashboard = () => {
             <div className="absolute top-0 right-0 w-32 h-32 bg-purple-600/30 blur-3xl"></div>
             <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-4">Crédits Soins</p>
             <div className="flex items-baseline gap-2">
-              <span className="text-6xl font-black">{Math.max(0, 2 - bookings.length)}</span>
-              <span className="text-xl font-bold text-purple-600">/ 2</span>
+              {/* On utilise les données de l'utilisateur venant de Mongoose */}
+              <span className="text-6xl font-black">{currentUser?.remainingSessions || 0}</span>
+              <span className="text-xl font-bold text-purple-600">SÉANCES</span>
             </div>
           </div>
+          
           <div className="p-10 rounded-[3rem] bg-gray-50 border border-gray-100">
             <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-4">Compte Client</p>
-            <h3 className="text-xl font-black truncate uppercase">{currentUser?.email.split('@')[0]}</h3>
-            <p className="text-[10px] font-bold text-purple-600 mt-2 uppercase tracking-widest italic">Membre Privilège</p>
+            <h3 className="text-xl font-black truncate uppercase">{currentUser?.email?.split('@')[0]}</h3>
+            <p className="text-[10px] font-bold text-purple-600 mt-2 uppercase tracking-widest italic">
+                {currentUser?.role === 'admin' ? 'Administrateur' : 'Membre Privilège'}
+            </p>
           </div>
         </div>
 
@@ -119,7 +123,7 @@ const Dashboard = () => {
               <AnimatePresence>
                 {bookings.map((b) => (
                   <motion.div 
-                    key={b.id}
+                    key={b._id || b.id} // Mongoose utilise _id
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, x: -20 }}
@@ -129,7 +133,7 @@ const Dashboard = () => {
                       <h4 className="font-black text-black uppercase text-sm">{b.service}</h4>
                       <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mt-1">{b.date} • {b.time}</p>
                     </div>
-                    <button onClick={() => deleteBooking(b.id)} className="text-gray-300 hover:text-red-500 transition-colors">
+                    <button onClick={() => deleteBooking(b._id)} className="text-gray-300 hover:text-red-500 transition-colors">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                   </motion.div>

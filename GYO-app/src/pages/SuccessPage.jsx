@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import api from '../api/axios'; // On utilise ton instance Axios
+import api from '../api/axios'; 
 
 const SuccessPage = () => {
   const [isVerifying, setIsVerifying] = useState(true);
@@ -9,53 +9,51 @@ const SuccessPage = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // 1. Récupérer l'utilisateur MongoDB
-    const userData = localStorage.getItem('gyo_user');
+    // 1. Récupérer l'utilisateur (Utilisation de la clé 'user' cohérente)
+    const userData = localStorage.getItem('user');
     
     if (!userData) {
-      // Si pas de session, on redirige vers le login après un court délai
-      const timer = setTimeout(() => navigate('/login'), 5000);
+      // Si pas de session, redirection rapide
+      const timer = setTimeout(() => navigate('/login'), 3000);
       return () => clearTimeout(timer);
     }
 
     const currentUser = JSON.parse(userData);
     let intervalId;
 
-    // 2. Fonction pour vérifier le profil sur ton backend MongoDB
+    // 2. Vérification du statut sur MongoDB (attente du Webhook Stripe)
     const verifySubscription = async () => {
       try {
-        // On récupère le profil frais du backend
         const response = await api.get(`/users/profile/${currentUser.email}`);
         const profile = response.data;
 
-        if (profile.subscription?.status === 'active') {
-          setPlanName(profile.subscription.planName);
+        // On vérifie soit le statut d'abonnement, soit si des séances ont été ajoutées
+        if (profile.subscription?.status === 'active' || profile.remainingSessions > 0) {
+          setPlanName(profile.subscription?.planName || "Pack de Séances");
           setIsVerifying(false);
           
-          // ✅ Mise à jour du localStorage pour que le reste du site sache qu'on est abonné
-          localStorage.setItem('gyo_user', JSON.stringify(profile));
+          // ✅ SYNC : Mise à jour du localStorage pour refléter les nouveaux crédits
+          localStorage.setItem('user', JSON.stringify(profile));
           
-          clearInterval(intervalId); // On arrête de chercher une fois activé
+          if (intervalId) clearInterval(intervalId);
         }
       } catch (err) {
-        console.error("Erreur lors de la vérification du paiement:", err);
+        console.error("Vérification en cours...", err.message);
       }
     };
 
-    // 3. On vérifie immédiatement, puis toutes les 3 secondes
+    // 3. Boucle de vérification (le temps que Stripe parle à ton Backend)
     verifySubscription();
-    intervalId = setInterval(verifySubscription, 3000);
+    intervalId = setInterval(verifySubscription, 4000); // Toutes les 4 secondes
 
-    // Timeout de sécurité : si après 30s rien ne se passe, on arrête
+    // Timeout de sécurité (45s)
     const safetyTimeout = setTimeout(() => {
-        if (isVerifying) {
-            clearInterval(intervalId);
-            // On peut laisser l'utilisateur sur la page ou lui dire de contacter le support
-        }
-    }, 30000);
+        clearInterval(intervalId);
+        // Si après 45s c'est toujours isVerifying, on affiche un message d'aide
+    }, 45000);
 
     return () => {
-      clearInterval(intervalId);
+      if (intervalId) clearInterval(intervalId);
       clearTimeout(safetyTimeout);
     };
   }, [navigate]);
@@ -100,10 +98,10 @@ const SuccessPage = () => {
             <motion.p 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="text-gray-400 text-lg font-medium leading-relaxed mb-12"
+              className="text-gray-400 text-lg font-medium leading-relaxed"
             >
               Votre forfait <span className="text-white font-black italic">{planName}</span> est désormais actif. 
-              Vous faites partie de l'élite GYO Excellence.
+              Préparez-vous pour l'excellence.
             </motion.p>
           )}
         </div>
@@ -116,9 +114,9 @@ const SuccessPage = () => {
           >
             <Link 
               to="/mon-compte" 
-              className="bg-purple-600 text-white px-10 py-5 rounded-full font-black uppercase tracking-widest text-[10px] hover:bg-white hover:text-black transition-all duration-500 shadow-xl shadow-purple-500/20"
+              className="bg-purple-600 text-white px-10 py-5 rounded-full font-black uppercase tracking-widest text-[10px] hover:bg-white hover:text-black transition-all duration-500"
             >
-              Accéder à mon espace
+              Mon Tableau de bord
             </Link>
             <Link 
               to="/reserver" 
@@ -129,9 +127,11 @@ const SuccessPage = () => {
           </motion.div>
         )}
 
-        <p className="mt-16 text-[9px] text-gray-600 uppercase tracking-[0.3em] font-bold">
-          Besoin d'aide ? Conciergerie GYO : <span className="text-gray-400">+225 00 00 00 00 00</span>
-        </p>
+        {isVerifying && (
+            <p className="mt-12 text-[9px] text-gray-700 uppercase tracking-widest">
+                Ne fermez pas cette page, nous traitons votre commande.
+            </p>
+        )}
       </div>
     </div>
   );

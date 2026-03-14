@@ -1,37 +1,35 @@
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 
-// --- 1. INSCRIPTION (REGISTER) - Pour corriger ton erreur 404 ---
+// --- 1. INSCRIPTION (REGISTER) ---
 exports.register = async (req, res) => {
     try {
         const { email, password, firstName, lastName } = req.body;
 
-        // Vérification si l'utilisateur existe déjà
         const existingUser = await User.findOne({ email: email.trim().toLowerCase() });
         if (existingUser) {
             return res.status(400).json({ message: "Cet email est déjà utilisé." });
         }
 
-        // Hachage du mot de passe
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        // Création du nouvel utilisateur
         const newUser = new User({
             email: email.trim().toLowerCase(),
             password: hashedPassword,
             firstName,
             lastName,
-            role: 'client' // Rôle par défaut
+            role: 'client'
         });
 
         await newUser.save();
         
-        // On retourne l'utilisateur sans le mot de passe
         const { password: _, ...userWithoutPassword } = newUser.toObject();
+        
+        // MODIFICATION ICI : On envoie les données à plat
         res.status(201).json({ 
             message: "Utilisateur créé avec succès", 
-            user: userWithoutPassword 
+            ...userWithoutPassword 
         });
 
     } catch (err) {
@@ -46,33 +44,24 @@ exports.login = async (req, res) => {
     const password = req.body.password;
 
     try {
-        console.log(`Attempting login for: ${email}`);
-
         const user = await User.findOne({ email: email });
         
         if (!user) {
-            console.warn(`⚠️ Login fail: User ${email} not found.`);
             return res.status(404).json({ message: "Utilisateur non trouvé" });
         }
 
-        if (!user.password) {
-            console.error(`🚨 Password missing in DB for ${email}`);
-            return res.status(400).json({ message: "Compte mal configuré (Pas de password)." });
-        }
-
         const isMatch = await bcrypt.compare(password, user.password);
-        
         if (!isMatch) {
-            console.warn(`❌ Password mismatch for ${email}`);
             return res.status(401).json({ message: "Mot de passe incorrect" });
         }
 
-        console.log(`✅ Login success: ${email}`);
-
         const { password: _, ...userWithoutPassword } = user.toObject();
+
+        // MODIFICATION ICI : On "étale" userWithoutPassword pour que le frontend 
+        // puisse lire directement data.email ou data.role
         res.status(200).json({
             message: "Connexion réussie",
-            user: userWithoutPassword
+            ...userWithoutPassword
         });
 
     } catch (err) {
@@ -81,7 +70,7 @@ exports.login = async (req, res) => {
     }
 };
 
-// --- 3. RÉCUPÉRER UN PROFIL PAR EMAIL (Utilisé par SuccessPage) ---
+// --- 3. RÉCUPÉRER UN PROFIL PAR EMAIL ---
 exports.getUserProfile = async (req, res) => {
     try {
         const email = req.params.email.toLowerCase();
@@ -99,7 +88,7 @@ exports.getUserProfile = async (req, res) => {
     }
 };
 
-// --- 4. RÉCUPÉRER TOUS LES UTILISATEURS (Admin) ---
+// --- 4. RÉCUPÉRER TOUS LES UTILISATEURS ---
 exports.getAllUsers = async (req, res) => {
     try {
         const users = await User.find({}).select('-password').sort({ createdAt: -1 });
@@ -110,7 +99,7 @@ exports.getAllUsers = async (req, res) => {
     }
 };
 
-// --- 🔥 5. ROUTE DE SECOURS (RESET ADMIN) 🔥 ---
+// --- 🔥 5. ROUTE DE SECOURS (RESET ADMIN) ---
 exports.resetAdminPassword = async (req, res) => {
     try {
         const salt = await bcrypt.genSalt(10);
@@ -127,8 +116,7 @@ exports.resetAdminPassword = async (req, res) => {
 
         if (!result) return res.status(404).send("Compte admin introuvable.");
         
-        console.log("✅ Admin password reset via emergency route");
-        res.send("<h1>Succès !</h1><p>Le mot de passe de <b>yohannesende@gmail.com</b> a été mis à jour avec le hash correct.</p>");
+        res.send("<h1>Succès !</h1><p>Le mot de passe a été mis à jour.</p>");
     } catch (err) {
         res.status(500).send("Erreur: " + err.message);
     }

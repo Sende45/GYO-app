@@ -14,22 +14,18 @@ const Subscriptions = () => {
       try {
         const response = await api.get('/prices');
         
-        // ✅ FILTRE LARGE : On attrape tout ce qui ressemble à un abonnement ou tes packs spécifiques
+        // On filtre pour ne garder que les abonnements (catégorie ou mots-clés)
         const subs = response.data.filter(p => {
-          const name = p.name.toLowerCase();
-          const category = p.category.toLowerCase();
+          const name = p.name?.toLowerCase() || "";
+          const category = p.category?.toLowerCase() || "";
           
           return (
             category === 'abonnement' || 
-            name.includes('club') || 
-            name.includes('solo') || 
-            name.includes('luxe') || 
-            name.includes('privilège') ||
-            name.includes('vip')
+            ['club', 'solo', 'luxe', 'privilège', 'vip'].some(keyword => name.includes(keyword))
           );
         });
 
-        // Tri par prix croissant (Solo -> Luxe -> VIP)
+        // Tri par prix (Solo -> Luxe -> VIP)
         const sortedSubs = subs.sort((a, b) => a.amount - b.amount);
         setPlans(sortedSubs);
       } catch (err) {
@@ -43,8 +39,8 @@ const Subscriptions = () => {
 
   // --- 2. LOGIQUE DE PAIEMENT STRIPE ---
   const handleSelectPlan = async (plan) => {
-    // On récupère l'utilisateur dans le localStorage (Session MongoDB)
-    const userData = localStorage.getItem('gyo_user');
+    // MODIF : Utilisation de la clé 'user' cohérente avec Login.jsx
+    const userData = localStorage.getItem('user');
 
     if (!userData) {
       alert("Veuillez vous connecter pour rejoindre le Club GYO.");
@@ -59,16 +55,16 @@ const Subscriptions = () => {
       // Appel au backend pour créer la session Stripe
       const response = await api.post('/payments/create-checkout-session', {
         priceId: plan.stripePriceId, 
-        userId: currentUser._id || currentUser.userId, // ID MongoDB
+        userId: currentUser._id, // Format MongoDB standard
         email: currentUser.email,
         planName: plan.name,
         sessionsCount: plan.duration 
       });
 
-      if (response.data && response.data.url) {
+      if (response.data?.url) {
         window.location.href = response.data.url;
       } else {
-        throw new Error("Impossible de générer le lien de paiement.");
+        throw new Error("Lien de paiement introuvable.");
       }
 
     } catch (error) {
@@ -91,88 +87,77 @@ const Subscriptions = () => {
 
   return (
     <div className="min-h-screen bg-black py-24 px-6 overflow-hidden relative font-sans">
-      {/* Effet visuel de fond */}
+      {/* Background Effect */}
       <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-purple-900/20 via-black to-black opacity-70 pointer-events-none" />
 
       <div className="max-w-7xl mx-auto text-center mb-20 relative z-10">
         <span className="text-purple-500 font-black tracking-[0.4em] text-[10px] uppercase italic">Expérience Exclusive</span>
         <h2 className="text-5xl md:text-7xl font-black text-white tracking-tighter mt-4 uppercase italic">
-          REJOIGNEZ LE <span className="text-purple-500 italic">CLUB GYO</span>
+          REJOIGNEZ LE <span className="text-purple-500">CLUB GYO</span>
         </h2>
-        <p className="text-gray-400 mt-6 max-w-2xl mx-auto font-medium leading-relaxed uppercase text-[10px] tracking-widest">
-          Une immersion totale dans le bien-être avec nos forfaits mensuels sans engagement.
-        </p>
       </div>
 
-      {/* GRILLE DES FORFAITS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto relative z-10">
-        {plans.map((plan, index) => (
-          <div key={index} className="relative group transition-all duration-500 hover:translate-y-[-10px]">
-            <div className={`relative h-full p-10 rounded-[3rem] backdrop-blur-xl flex flex-col z-10 border transition-all duration-500 ${
-              plan.name.toLowerCase().includes("luxe") || plan.name.toLowerCase().includes("vip")
-              ? 'bg-purple-600/10 border-purple-500 shadow-[0_0_40px_rgba(124,58,237,0.1)]' 
-              : 'bg-white/5 border-white/10'
-            }`}>
-              
-              {(plan.name.toLowerCase().includes("luxe") || plan.name.toLowerCase().includes("vip")) && (
-                <span className="absolute -top-4 left-1/2 -translate-x-1/2 bg-purple-600 text-white text-[10px] font-black uppercase tracking-widest py-2 px-6 rounded-full">
-                  {plan.name.toLowerCase().includes("vip") ? "Prestige" : "Le plus prisé"}
-                </span>
-              )}
+        {plans.map((plan, index) => {
+          const isPremium = plan.name.toLowerCase().includes("luxe") || plan.name.toLowerCase().includes("vip");
+          
+          return (
+            <div key={index} className="relative group transition-all duration-500 hover:translate-y-[-10px]">
+              <div className={`relative h-full p-10 rounded-[3rem] backdrop-blur-xl flex flex-col z-10 border transition-all duration-500 ${
+                isPremium 
+                ? 'bg-purple-600/10 border-purple-500 shadow-[0_0_40px_rgba(124,58,237,0.1)]' 
+                : 'bg-white/5 border-white/10'
+              }`}>
+                
+                {isPremium && (
+                  <span className="absolute -top-4 left-1/2 -translate-x-1/2 bg-purple-600 text-white text-[10px] font-black uppercase tracking-widest py-2 px-6 rounded-full">
+                    {plan.name.toLowerCase().includes("vip") ? "Prestige" : "Le plus prisé"}
+                  </span>
+                )}
 
-              <h3 className="text-2xl font-black text-white mb-2 uppercase tracking-tighter italic">{plan.name}</h3>
-              
-              <div className="flex items-baseline mb-6">
-                <span className="text-4xl font-black text-white tracking-tighter">
-                  {new Intl.NumberFormat('fr-FR').format(plan.amount)}
-                </span>
-                <span className="text-purple-500 ml-2 font-black uppercase text-[10px] tracking-widest">CFA / mois</span>
-              </div>
-              
-              <div className="flex items-center gap-2 mb-8">
-                <div className="h-[1px] flex-1 bg-white/10"></div>
-                <p className="text-zinc-500 text-[9px] font-black uppercase tracking-widest">
-                  {plan.duration || 0} {plan.duration > 1 ? 'Séances' : 'Séance'} / mois
-                </p>
-                <div className="h-[1px] flex-1 bg-white/10"></div>
-              </div>
+                <h3 className="text-2xl font-black text-white mb-2 uppercase tracking-tighter italic">{plan.name}</h3>
+                
+                <div className="flex items-baseline mb-6">
+                  <span className="text-4xl font-black text-white tracking-tighter">
+                    {new Intl.NumberFormat('fr-FR').format(plan.amount)}
+                  </span>
+                  <span className="text-purple-500 ml-2 font-black uppercase text-[10px] tracking-widest">CFA / mois</span>
+                </div>
+                
+                <div className="flex items-center gap-2 mb-8">
+                  <div className="h-[1px] flex-1 bg-white/10"></div>
+                  <p className="text-zinc-500 text-[9px] font-black uppercase tracking-widest">
+                    {plan.duration || 0} {plan.duration > 1 ? 'Séances' : 'Séance'} / mois
+                  </p>
+                  <div className="h-[1px] flex-1 bg-white/10"></div>
+                </div>
 
-              <ul className="space-y-4 mb-12 flex-1">
-                <li className="flex items-center text-[10px] text-zinc-300 font-bold uppercase tracking-widest gap-3">
-                  <div className="w-1.5 h-1.5 bg-purple-500 rounded-full" />
-                  Accès Privilège Spa
-                </li>
-                <li className="flex items-center text-[10px] text-zinc-300 font-bold uppercase tracking-widest gap-3">
-                  <div className="w-1.5 h-1.5 bg-purple-500 rounded-full" />
-                  Tisane Détox Offerte
-                </li>
-                {plan.amount >= 65000 && (
+                <ul className="space-y-4 mb-12 flex-1">
                   <li className="flex items-center text-[10px] text-zinc-300 font-bold uppercase tracking-widest gap-3">
                     <div className="w-1.5 h-1.5 bg-purple-500 rounded-full" />
-                    Accès prioritaire VIP
+                    Accès Privilège Spa
                   </li>
-                )}
-              </ul>
+                  <li className="flex items-center text-[10px] text-zinc-300 font-bold uppercase tracking-widest gap-3">
+                    <div className="w-1.5 h-1.5 bg-purple-500 rounded-full" />
+                    Tisane Détox Offerte
+                  </li>
+                </ul>
 
-              <button 
-                onClick={() => handleSelectPlan(plan)}
-                disabled={loadingPlan !== null}
-                className={`w-full py-5 rounded-full font-black uppercase tracking-widest text-[10px] transition-all duration-500 flex items-center justify-center gap-2 ${
-                  plan.name.toLowerCase().includes("luxe") || plan.name.toLowerCase().includes("vip")
-                  ? 'bg-purple-600 text-white hover:bg-white hover:text-black' 
-                  : 'bg-white text-black hover:bg-purple-600 hover:text-white'
-                } ${loadingPlan === plan.name ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                {loadingPlan === plan.name ? (
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 border-2 border-t-transparent border-current rounded-full animate-spin" />
-                    Sécurisation...
-                  </div>
-                ) : "Choisir ce forfait"}
-              </button>
+                <button 
+                  onClick={() => handleSelectPlan(plan)}
+                  disabled={loadingPlan !== null}
+                  className={`w-full py-5 rounded-full font-black uppercase tracking-widest text-[10px] transition-all duration-500 flex items-center justify-center gap-2 ${
+                    isPremium
+                    ? 'bg-purple-600 text-white hover:bg-white hover:text-black' 
+                    : 'bg-white text-black hover:bg-purple-600 hover:text-white'
+                  } ${loadingPlan === plan.name ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  {loadingPlan === plan.name ? "Sécurisation..." : "Choisir ce forfait"}
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
