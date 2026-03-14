@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import api from '../api/axios'; 
 import logo from '../assets/logo.png'; 
-import useGyoStore from '../store/useGyoStore'; // Import de ton store Zustand
+import useGyoStore from '../store/useGyoStore';
 
 const AdminLogin = () => {
   const [email, setEmail] = useState('');
@@ -12,21 +12,21 @@ const AdminLogin = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   
-  // Utilisation de l'action du store
   const { setUser } = useGyoStore();
 
-  // AU CHARGEMENT : Vérifier la session une seule fois
+  // Vérification de session au montage
   useEffect(() => {
-    const userData = localStorage.getItem('gyo_user');
+    // MODIF : On utilise la clé 'user' cohérente
+    const userData = localStorage.getItem('user');
     if (userData) {
       try {
         const user = JSON.parse(userData);
-        // Si déjà admin/agent, on redirige proprement
-        if (user.role === 'admin' || user.role === 'agent') {
+        // Utilisation du chaînage optionnel ?.
+        if (user?.role === 'admin' || user?.role === 'agent') {
           navigate('/admin-dashboard', { replace: true });
         }
       } catch (e) {
-        localStorage.removeItem('gyo_user');
+        localStorage.removeItem('user');
       }
     }
   }, [navigate]);
@@ -39,18 +39,23 @@ const AdminLogin = () => {
     setError('');
     
     try {
-      // 1. Appel Backend (MongoDB + Bcryptjs)
-      const response = await api.post('/users/login', { email, password });
-      const userData = response.data.user;
+      const response = await api.post('/users/login', { 
+        email: email.trim().toLowerCase(), 
+        password 
+      });
 
-      // 2. Vérification du rôle
-      if (userData.role === 'admin' || userData.role === 'agent') {
-        // ✅ Mise à jour du Store Zustand (qui gère aussi le localStorage)
+      // MODIF : Extraction robuste
+      const userData = response.data.user || response.data;
+
+      // ✅ LA MODIF CRUCIALE : userData?.role évite le crash si le serveur répond mal
+      if (userData?.role === 'admin' || userData?.role === 'agent') {
         setUser(userData);
         
-        console.log("Accès Terminal autorisé : " + userData.role);
+        // Stockage du token si présent pour les headers Axios
+        if (userData.token) {
+          localStorage.setItem('token', userData.token);
+        }
         
-        // 3. Redirection immédiate
         navigate('/admin-dashboard', { replace: true }); 
       } else {
         setError("Accès refusé. Réservé au staff GYO.");
@@ -58,7 +63,8 @@ const AdminLogin = () => {
 
     } catch (err) {
       console.error("Erreur Login Admin:", err);
-      const message = err.response?.data?.message || "Identifiants de sécurité incorrects.";
+      // Gère les erreurs 500 ou les problèmes réseau sans faire planter l'UI
+      const message = err.response?.data?.message || "Identifiants de sécurité incorrects ou erreur serveur.";
       setError(message);
     } finally {
       setIsLoading(false);
@@ -66,7 +72,7 @@ const AdminLogin = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gyo-black flex items-center justify-center px-6 relative overflow-hidden">
+    <div className="min-h-screen bg-black flex items-center justify-center px-6 relative overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-purple-900/10 via-transparent to-transparent opacity-50" />
       
       <motion.div 
@@ -77,10 +83,10 @@ const AdminLogin = () => {
         <div className="bg-white/5 backdrop-blur-xl border border-white/5 p-10 rounded-2xl shadow-2xl">
           <div className="text-center mb-10">
             <img src={logo} alt="Logo GYO" className="h-10 mx-auto mb-6 grayscale brightness-200" />
-            <h2 className="text-sm font-black text-gyo-white tracking-[0.4em] uppercase">
-              Terminal <span className="text-gyo-purple">Staff</span>
+            <h2 className="text-sm font-black text-white tracking-[0.4em] uppercase">
+              Terminal <span className="text-purple-500">Staff</span>
             </h2>
-            <div className="h-1 w-12 bg-gyo-purple mx-auto mt-4 rounded-full" />
+            <div className="h-1 w-12 bg-purple-500 mx-auto mt-4 rounded-full" />
           </div>
 
           {error && (
@@ -97,11 +103,10 @@ const AdminLogin = () => {
               <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest ml-1">Identifiant Staff</label>
               <input 
                 type="email" 
-                className="w-full bg-white/5 border border-white/5 rounded-xl px-5 py-4 text-gyo-white text-sm focus:outline-none focus:border-gyo-purple transition-all"
+                className="w-full bg-white/5 border border-white/5 rounded-xl px-5 py-4 text-white text-sm focus:outline-none focus:border-purple-500 transition-all"
                 placeholder="admin@gyospa.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                autoComplete="email"
                 required
               />
             </div>
@@ -110,11 +115,10 @@ const AdminLogin = () => {
               <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest ml-1">Clé de sécurité</label>
               <input 
                 type="password" 
-                className="w-full bg-white/5 border border-white/5 rounded-xl px-5 py-4 text-gyo-white text-sm focus:outline-none focus:border-gyo-purple transition-all"
+                className="w-full bg-white/5 border border-white/5 rounded-xl px-5 py-4 text-white text-sm focus:outline-none focus:border-purple-500 transition-all"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
                 required
               />
             </div>
@@ -122,7 +126,7 @@ const AdminLogin = () => {
             <button 
               type="submit"
               disabled={isLoading}
-              className="w-full py-4 bg-gyo-white text-gyo-black rounded-xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-gyo-purple hover:text-gyo-white transition-all duration-300 disabled:opacity-50"
+              className="w-full py-4 bg-white text-black rounded-xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-purple-600 hover:text-white transition-all duration-300 disabled:opacity-50"
             >
               {isLoading ? 'Vérification...' : 'Initialiser la session'}
             </button>
