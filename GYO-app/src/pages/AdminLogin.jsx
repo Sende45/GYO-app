@@ -16,13 +16,13 @@ const AdminLogin = () => {
 
   // Vérification de session au montage
   useEffect(() => {
-    // MODIF : On utilise la clé 'user' cohérente
     const userData = localStorage.getItem('user');
     if (userData) {
       try {
         const user = JSON.parse(userData);
-        // Utilisation du chaînage optionnel ?.
+        // On redirige seulement si le rôle est correct
         if (user?.role === 'admin' || user?.role === 'agent') {
+          // { replace: true } évite de pouvoir revenir en arrière sur le login
           navigate('/admin-dashboard', { replace: true });
         }
       } catch (e) {
@@ -44,14 +44,14 @@ const AdminLogin = () => {
         password 
       });
 
-      // MODIF : Extraction robuste
+      // Extraction sécurisée (gère data.user ou data directement)
       const userData = response.data.user || response.data;
 
-      // ✅ LA MODIF CRUCIALE : userData?.role évite le crash si le serveur répond mal
+      // Protection contre les réponses vides ou incorrectes
       if (userData?.role === 'admin' || userData?.role === 'agent') {
+        // Mise à jour du Store Zustand
         setUser(userData);
         
-        // Stockage du token si présent pour les headers Axios
         if (userData.token) {
           localStorage.setItem('token', userData.token);
         }
@@ -63,7 +63,6 @@ const AdminLogin = () => {
 
     } catch (err) {
       console.error("Erreur Login Admin:", err);
-      // Gère les erreurs 500 ou les problèmes réseau sans faire planter l'UI
       const message = err.response?.data?.message || "Identifiants de sécurité incorrects ou erreur serveur.";
       setError(message);
     } finally {
@@ -73,37 +72,38 @@ const AdminLogin = () => {
 
   return (
     <div className="min-h-screen bg-black flex items-center justify-center px-6 relative overflow-hidden">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-purple-900/10 via-transparent to-transparent opacity-50" />
+      {/* Glow Effect */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-purple-900/20 via-transparent to-transparent opacity-50" />
       
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="max-w-md w-full z-10"
       >
-        <div className="bg-white/5 backdrop-blur-xl border border-white/5 p-10 rounded-2xl shadow-2xl">
+        <div className="bg-white/5 backdrop-blur-2xl border border-white/10 p-10 rounded-[2.5rem] shadow-2xl">
           <div className="text-center mb-10">
             <img src={logo} alt="Logo GYO" className="h-10 mx-auto mb-6 grayscale brightness-200" />
-            <h2 className="text-sm font-black text-white tracking-[0.4em] uppercase">
+            <h2 className="text-[10px] font-black text-white tracking-[0.5em] uppercase">
               Terminal <span className="text-purple-500">Staff</span>
             </h2>
-            <div className="h-1 w-12 bg-purple-500 mx-auto mt-4 rounded-full" />
+            <div className="h-[2px] w-8 bg-purple-500 mx-auto mt-4 rounded-full" />
           </div>
 
           {error && (
             <motion.div 
-              initial={{ x: -10 }} animate={{ x: 0 }}
-              className="bg-red-500/10 border-l-2 border-red-500 p-4 mb-6"
+              initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+              className="bg-red-500/10 border-l-4 border-red-500 p-4 mb-6 rounded-r-xl"
             >
-              <p className="text-red-500 text-[10px] font-bold uppercase tracking-widest">{error}</p>
+              <p className="text-red-500 text-[10px] font-black uppercase tracking-widest">{error}</p>
             </motion.div>
           )}
 
           <form onSubmit={handleAdminLogin} className="space-y-6">
             <div className="space-y-2">
-              <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest ml-1">Identifiant Staff</label>
+              <label className="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Identifiant Staff</label>
               <input 
                 type="email" 
-                className="w-full bg-white/5 border border-white/5 rounded-xl px-5 py-4 text-white text-sm focus:outline-none focus:border-purple-500 transition-all"
+                className="w-full bg-white/5 border border-white/5 rounded-2xl px-6 py-4 text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all"
                 placeholder="admin@gyospa.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -112,10 +112,10 @@ const AdminLogin = () => {
             </div>
 
             <div className="space-y-2">
-              <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest ml-1">Clé de sécurité</label>
+              <label className="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Clé de sécurité</label>
               <input 
                 type="password" 
-                className="w-full bg-white/5 border border-white/5 rounded-xl px-5 py-4 text-white text-sm focus:outline-none focus:border-purple-500 transition-all"
+                className="w-full bg-white/5 border border-white/5 rounded-2xl px-6 py-4 text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -126,17 +126,17 @@ const AdminLogin = () => {
             <button 
               type="submit"
               disabled={isLoading}
-              className="w-full py-4 bg-white text-black rounded-xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-purple-600 hover:text-white transition-all duration-300 disabled:opacity-50"
+              className="w-full py-5 bg-white text-black rounded-2xl font-black text-[10px] uppercase tracking-[0.3em] hover:bg-purple-600 hover:text-white transition-all duration-500 disabled:opacity-50"
             >
-              {isLoading ? 'Vérification...' : 'Initialiser la session'}
+              {isLoading ? 'Authentification...' : 'Initialiser la session'}
             </button>
           </form>
 
-          <div className="mt-10 flex justify-between items-center opacity-30">
-            <span className="text-[8px] text-white uppercase font-bold tracking-tighter">GYO System v2.0</span>
-            <div className="flex gap-1">
-              <div className="w-1 h-1 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-[8px] text-green-500 uppercase font-bold">Encrypted Connection</span>
+          <div className="mt-10 flex justify-between items-center opacity-20">
+            <span className="text-[7px] text-white uppercase font-black tracking-widest">GYO-OS v2.6.3</span>
+            <div className="flex gap-2 items-center">
+              <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+              <span className="text-[7px] text-green-500 uppercase font-black">Secure Tunnel</span>
             </div>
           </div>
         </div>
