@@ -14,18 +14,22 @@ const Subscriptions = () => {
       try {
         const response = await api.get('/prices');
         
-        // On filtre pour ne garder que les abonnements (catégorie ou mots-clés)
-        const subs = response.data.filter(p => {
-          const name = p.name?.toLowerCase() || "";
+        // On filtre pour ne garder que les abonnements
+        let subs = response.data.filter(p => {
           const category = p.category?.toLowerCase() || "";
-          
-          return (
-            category === 'abonnement' || 
-            ['club', 'solo', 'luxe', 'privilège', 'vip'].some(keyword => name.includes(keyword))
-          );
+          return category === 'abonnement';
         });
 
-        // Tri par prix (Solo -> Luxe -> VIP)
+        // SI LA DB EST VIDE : On définit tes 3 packs manuellement pour l'affichage
+        if (subs.length === 0) {
+          subs = [
+            { name: "Pack Solo", amount: 35000, duration: 4, stripePriceId: "price_solo", category: "abonnement" },
+            { name: "Luxe Illimité", amount: 65000, duration: 12, stripePriceId: "price_luxe", category: "abonnement" },
+            { name: "Privilège VIP", amount: 130000, duration: 30, stripePriceId: "price_vip", category: "abonnement" }
+          ];
+        }
+
+        // Tri par prix pour garantir l'ordre : Solo -> Luxe -> VIP
         const sortedSubs = subs.sort((a, b) => a.amount - b.amount);
         setPlans(sortedSubs);
       } catch (err) {
@@ -39,12 +43,12 @@ const Subscriptions = () => {
 
   // --- 2. LOGIQUE DE PAIEMENT STRIPE ---
   const handleSelectPlan = async (plan) => {
-    // MODIF : Utilisation de la clé 'user' cohérente avec Login.jsx
-    const userData = localStorage.getItem('user');
+    // MODIF : Utilisation de 'gyo_user' pour la cohérence globale
+    const userData = localStorage.getItem('gyo_user');
 
     if (!userData) {
       alert("Veuillez vous connecter pour rejoindre le Club GYO.");
-      navigate('/login');
+      navigate('/admin'); // Ou ta page de login client
       return;
     }
 
@@ -55,7 +59,7 @@ const Subscriptions = () => {
       // Appel au backend pour créer la session Stripe
       const response = await api.post('/payments/create-checkout-session', {
         priceId: plan.stripePriceId, 
-        userId: currentUser._id, // Format MongoDB standard
+        userId: currentUser._id,
         email: currentUser.email,
         planName: plan.name,
         sessionsCount: plan.duration 
@@ -87,7 +91,6 @@ const Subscriptions = () => {
 
   return (
     <div className="min-h-screen bg-black py-24 px-6 overflow-hidden relative font-sans">
-      {/* Background Effect */}
       <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-purple-900/20 via-black to-black opacity-70 pointer-events-none" />
 
       <div className="max-w-7xl mx-auto text-center mb-20 relative z-10">
@@ -99,7 +102,10 @@ const Subscriptions = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto relative z-10">
         {plans.map((plan, index) => {
-          const isPremium = plan.name.toLowerCase().includes("luxe") || plan.name.toLowerCase().includes("vip");
+          const nameLower = plan.name.toLowerCase();
+          const isLuxe = nameLower.includes("luxe");
+          const isVIP = nameLower.includes("privilège") || nameLower.includes("vip");
+          const isPremium = isLuxe || isVIP;
           
           return (
             <div key={index} className="relative group transition-all duration-500 hover:translate-y-[-10px]">
@@ -111,7 +117,7 @@ const Subscriptions = () => {
                 
                 {isPremium && (
                   <span className="absolute -top-4 left-1/2 -translate-x-1/2 bg-purple-600 text-white text-[10px] font-black uppercase tracking-widest py-2 px-6 rounded-full">
-                    {plan.name.toLowerCase().includes("vip") ? "Prestige" : "Le plus prisé"}
+                    {isVIP ? "Prestige" : "Le plus prisé"}
                   </span>
                 )}
 
@@ -127,7 +133,7 @@ const Subscriptions = () => {
                 <div className="flex items-center gap-2 mb-8">
                   <div className="h-[1px] flex-1 bg-white/10"></div>
                   <p className="text-zinc-500 text-[9px] font-black uppercase tracking-widest">
-                    {plan.duration || 0} {plan.duration > 1 ? 'Séances' : 'Séance'} / mois
+                    {isLuxe || isVIP ? 'Accès Illimité' : `${plan.duration || 0} Séances / mois`}
                   </p>
                   <div className="h-[1px] flex-1 bg-white/10"></div>
                 </div>
@@ -139,8 +145,14 @@ const Subscriptions = () => {
                   </li>
                   <li className="flex items-center text-[10px] text-zinc-300 font-bold uppercase tracking-widest gap-3">
                     <div className="w-1.5 h-1.5 bg-purple-500 rounded-full" />
-                    Tisane Détox Offerte
+                    {isVIP ? "Service Valet & Champagne" : "Tisane Détox Offerte"}
                   </li>
+                  {isPremium && (
+                    <li className="flex items-center text-[10px] text-zinc-300 font-bold uppercase tracking-widest gap-3">
+                      <div className="w-1.5 h-1.5 bg-purple-500 rounded-full" />
+                      Priorité sur les Réservations
+                    </li>
+                  )}
                 </ul>
 
                 <button 
