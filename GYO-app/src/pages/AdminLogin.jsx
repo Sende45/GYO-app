@@ -14,18 +14,23 @@ const AdminLogin = () => {
   
   const { setUser } = useGyoStore();
 
-  // Vérification de session au montage
+  // VERROU ANTI-BOUCLE : On vérifie la session une seule fois au montage
   useEffect(() => {
     const userData = localStorage.getItem('user');
+    
     if (userData) {
       try {
         const user = JSON.parse(userData);
-        // On redirige seulement si le rôle est correct
-        if (user?.role === 'admin' || user?.role === 'agent') {
-          // { replace: true } évite de pouvoir revenir en arrière sur le login
+        // Vérification stricte : on ne redirige que si on n'est PAS déjà sur le dashboard
+        // et que le rôle est autorisé.
+        const isStaff = user?.role === 'admin' || user?.role === 'agent';
+        const isNotAlreadyOnDashboard = window.location.pathname !== '/admin-dashboard';
+
+        if (isStaff && isNotAlreadyOnDashboard) {
           navigate('/admin-dashboard', { replace: true });
         }
       } catch (e) {
+        console.error("Session corrompue, nettoyage...");
         localStorage.removeItem('user');
       }
     }
@@ -44,18 +49,18 @@ const AdminLogin = () => {
         password 
       });
 
-      // Extraction sécurisée (gère data.user ou data directement)
       const userData = response.data.user || response.data;
 
-      // Protection contre les réponses vides ou incorrectes
+      // Utilisation du chaînage optionnel ?. pour éviter le crash si la réponse est mal formée
       if (userData?.role === 'admin' || userData?.role === 'agent') {
-        // Mise à jour du Store Zustand
+        // Met à jour Zustand + LocalStorage
         setUser(userData);
         
         if (userData.token) {
           localStorage.setItem('token', userData.token);
         }
         
+        // Redirection avec remplacement d'historique
         navigate('/admin-dashboard', { replace: true }); 
       } else {
         setError("Accès refusé. Réservé au staff GYO.");
@@ -72,7 +77,7 @@ const AdminLogin = () => {
 
   return (
     <div className="min-h-screen bg-black flex items-center justify-center px-6 relative overflow-hidden">
-      {/* Glow Effect */}
+      {/* Effet visuel de fond */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-purple-900/20 via-transparent to-transparent opacity-50" />
       
       <motion.div 
@@ -91,7 +96,8 @@ const AdminLogin = () => {
 
           {error && (
             <motion.div 
-              initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+              initial={{ opacity: 0, x: -10 }} 
+              animate={{ opacity: 1, x: 0 }}
               className="bg-red-500/10 border-l-4 border-red-500 p-4 mb-6 rounded-r-xl"
             >
               <p className="text-red-500 text-[10px] font-black uppercase tracking-widest">{error}</p>
@@ -128,15 +134,15 @@ const AdminLogin = () => {
               disabled={isLoading}
               className="w-full py-5 bg-white text-black rounded-2xl font-black text-[10px] uppercase tracking-[0.3em] hover:bg-purple-600 hover:text-white transition-all duration-500 disabled:opacity-50"
             >
-              {isLoading ? 'Authentification...' : 'Initialiser la session'}
+              {isLoading ? 'Vérification...' : 'Initialiser la session'}
             </button>
           </form>
 
           <div className="mt-10 flex justify-between items-center opacity-20">
-            <span className="text-[7px] text-white uppercase font-black tracking-widest">GYO-OS v2.6.3</span>
+            <span className="text-[7px] text-white uppercase font-black tracking-widest">GYO-OS v2.6.4</span>
             <div className="flex gap-2 items-center">
               <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-[7px] text-green-500 uppercase font-black">Secure Tunnel</span>
+              <span className="text-[7px] text-green-500 uppercase font-black">Tunnel Sécurisé</span>
             </div>
           </div>
         </div>
