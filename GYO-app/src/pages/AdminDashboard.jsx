@@ -54,13 +54,25 @@ const AdminDashboard = () => {
     }
   };
 
-  // --- 2. SÉCURITÉ AU CHARGEMENT ---
+  // --- 2. SÉCURITÉ AU CHARGEMENT (MODIFIÉ POUR HARMONISATION) ---
   useEffect(() => {
     const userData = localStorage.getItem('gyo_user');
     if (!userData) {
       navigate('/admin', { replace: true });
     } else {
-      fetchAllData();
+      try {
+        const user = JSON.parse(userData);
+        // On vérifie que le rôle est bien autorisé à voir le dashboard
+        if (user.role === 'admin' || user.role === 'agent') {
+          fetchAllData();
+        } else {
+          // Si c'est un client égaré, on le redirige vers l'accueil
+          navigate('/', { replace: true });
+        }
+      } catch (e) {
+        console.error("Erreur session:", e);
+        navigate('/admin', { replace: true });
+      }
     }
   }, [navigate]);
 
@@ -94,7 +106,7 @@ const AdminDashboard = () => {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('gyo_user');
+    localStorage.removeItem('gyo_user'); // Clé harmonisée
     navigate('/admin', { replace: true });
   };
 
@@ -133,8 +145,7 @@ const AdminDashboard = () => {
         </div>
       </nav>
 
-      {/* --- RESTE DU JSX (INCHANGÉ POUR TES FONCTIONNALITÉS) --- */}
-      {/* Modal, KPI, Charts, Filtres, Tableaux... Tout est là ! */}
+      {/* Modal, KPI, Charts, Filtres, Tableaux... */}
       {isPriceModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-white w-full max-w-lg rounded-[2.5rem] p-10 shadow-2xl relative">
