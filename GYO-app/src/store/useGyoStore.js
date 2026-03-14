@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { create } from 'zustand'; // Import nommé (correct)
 
 // Fonction de secours pour parser le localStorage sans crasher
 const getInitialUser = () => {
