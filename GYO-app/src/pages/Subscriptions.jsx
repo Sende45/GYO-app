@@ -14,22 +14,38 @@ const Subscriptions = () => {
       try {
         const response = await api.get('/prices');
         
-        // On filtre pour ne garder que les abonnements
         let subs = response.data.filter(p => {
           const category = p.category?.toLowerCase() || "";
           return category === 'abonnement';
         });
 
-        // SI LA DB EST VIDE : On définit tes 3 packs manuellement pour l'affichage
+        // UTILISATION DE TES IDS STRIPE RÉELS
         if (subs.length === 0) {
           subs = [
-            { name: "Pack Solo", amount: 35000, duration: 4, stripePriceId: "price_solo", category: "abonnement" },
-            { name: "Luxe Illimité", amount: 65000, duration: 12, stripePriceId: "price_luxe", category: "abonnement" },
-            { name: "Privilège VIP", amount: 130000, duration: 30, stripePriceId: "price_vip", category: "abonnement" }
+            { 
+              name: "Pack Solo", 
+              amount: 35000, 
+              duration: 4, 
+              stripePriceId: "price_1T6vkGIImwaKuwtjMWb9PUKj", 
+              category: "abonnement" 
+            },
+            { 
+              name: "Luxe Illimité", 
+              amount: 65000, 
+              duration: 99, 
+              stripePriceId: "price_1T6vmLIImwaKuwtjBavMj7bW", 
+              category: "abonnement" 
+            },
+            { 
+              name: "Privilège VIP", 
+              amount: 130000, 
+              duration: 99, 
+              stripePriceId: "price_1T6vndIImwaKuwtjdI9KpdKG", 
+              category: "abonnement" 
+            }
           ];
         }
 
-        // Tri par prix pour garantir l'ordre : Solo -> Luxe -> VIP
         const sortedSubs = subs.sort((a, b) => a.amount - b.amount);
         setPlans(sortedSubs);
       } catch (err) {
@@ -43,12 +59,12 @@ const Subscriptions = () => {
 
   // --- 2. LOGIQUE DE PAIEMENT STRIPE ---
   const handleSelectPlan = async (plan) => {
-    // MODIF : Utilisation de 'gyo_user' pour la cohérence globale
+    // Vérification de la session harmonisée sur gyo_user
     const userData = localStorage.getItem('gyo_user');
 
     if (!userData) {
       alert("Veuillez vous connecter pour rejoindre le Club GYO.");
-      navigate('/admin'); // Ou ta page de login client
+      navigate('/admin'); 
       return;
     }
 
@@ -56,7 +72,6 @@ const Subscriptions = () => {
     setLoadingPlan(plan.name);
 
     try {
-      // Appel au backend pour créer la session Stripe
       const response = await api.post('/payments/create-checkout-session', {
         priceId: plan.stripePriceId, 
         userId: currentUser._id,
@@ -84,7 +99,7 @@ const Subscriptions = () => {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center space-y-4">
         <div className="w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin" />
-        <p className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.3em]">Initialisation du Club GYO...</p>
+        <p className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.3em]">Ouverture du Club GYO...</p>
       </div>
     );
   }
